@@ -208,7 +208,13 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case Distinct(exprs) =>
       sb.append("distinct")
       ppNary(exprs, "(", ", ", ")", lvl)
-    
+    case FiniteList(exprs) =>
+      ppNary(exprs,"List(", ",", ")", lvl)
+    case NilList(_) =>
+      sb.append("Nil")
+    case ListLength(t) =>
+      pp(t,lvl)
+      sb.append(".length")
     case IfExpr(c, t, e) =>
       sb.append("if (")
       pp(c, lvl)
@@ -312,6 +318,7 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case MapType(ft,tt) =>  sb.append("Map["); pp(ft, lvl); sb.append(","); pp(tt, lvl); sb.append("]")
     case MultisetType(bt) => sb.append("Multiset["); pp(bt, lvl); sb.append("]")
     case TupleType(tpes) => ppNaryType(tpes, "(", ", ", ")", lvl)
+    case ListType(tpe) => sb.append("List["); pp(tpe,lvl); sb.append("]")
     case c: ClassType => sb.append(c.classDef.id)
     case _ => sb.append("Type?")
   }

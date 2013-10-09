@@ -14,6 +14,7 @@ object Leon extends Build {
   def is64 = System.getProperty("sun.arch.data.model") == "64"
   def ldLibraryDir32 = file(".") / "lib-bin" / "32"
   def ldLibraryDir64 = file(".") / "lib-bin" / "64"
+  def osname = System.getProperty("os.name")
 
   val cleanTask = TaskKey[Unit]("clean", "Cleans up the generated binaries and scripts.") <<= (streams, clean) map { (s,c) =>
     c
@@ -65,7 +66,23 @@ object Leon extends Build {
       sfw.write("    exit -1" + nl)
       sfw.write("fi"+ nl)
     }
-    sfw.write("export LD_LIBRARY_PATH=\""+ldLibPath+"\"" + nl)
+
+    //OS specific library path
+    val librarypath = osname.split(" ").toList match {
+      case "Mac" :: "OS" :: ver :: Nil =>
+        s.log.info("Generating script for Mac OS "+ver)
+        "DYLD_LIBRARY_PATH"
+      case "Linux" :: Nil => 
+        s.log.info("Generating script for Linux")
+        "LD_LIBRARY_PATH"
+
+      //Default original configufiguration
+      case r @ _ =>
+        s.log.warn("Unknown OS: "+osname)
+        s.log.warn("Generating script for default case Linux ")
+        "LD_LIBRARY_PATH"
+    }
+    sfw.write("export "+librarypath+"=\""+ldLibPath+"\"" + nl)
     sfw.write("export LEON_LIBRARY_PATH=\""+leonLibPath+"\"" + nl)
     sfw.write("export SCALA_HOME=\""+scalaHomeDir+"\"" + nl)
     sfw.close

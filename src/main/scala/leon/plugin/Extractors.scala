@@ -16,7 +16,7 @@ trait Extractors {
     rootMirror.getClassByName(newTypeName(str))
   }
   def objectFromName(str: String) = {
-    rootMirror.getClassByName(newTermName(str))
+    rootMirror.getClassByName(newTermName(str)).companionModule
   }
 
   protected lazy val tuple2Sym          = classFromName("scala.Tuple2")
@@ -29,6 +29,9 @@ trait Extractors {
   protected lazy val arraySym           = classFromName("scala.Array")
   protected lazy val someClassSym       = classFromName("scala.Some")
   protected lazy val function1TraitSym  = classFromName("scala.Function1")
+  protected lazy val listSym            = classFromName("scala.List")
+  protected lazy val nilSym             = objectFromName("scala.collection.immutable.Nil")
+  protected lazy val consSym            = classFromName("scala.collection.immutable.$colon$colon")
 
   def isTuple2(sym : Symbol) : Boolean = sym == tuple2Sym
   def isTuple3(sym : Symbol) : Boolean = sym == tuple3Sym
@@ -63,6 +66,24 @@ trait Extractors {
 
   def isFunction1TraitSym(sym : Symbol) : Boolean = {
     sym == function1TraitSym
+  }
+
+  def isListTraitSym(sym : Symbol) : Boolean = {
+    getResolvedTypeSym(sym) == listSym 
+  }
+
+  def isNilTraitSym(sym : Symbol) : Boolean = {
+    val resolved = getResolvedTypeSym(sym)
+    //The LHS returns scala.collection.immutable.Nil
+    //The RHS should also be the Nil companion object defined in scala.collection.immutable
+    //@TODO find why getResolvedTypeSym == nilSym does'nt work
+    val ret = resolved.fullName == nilSym.fullName
+    ret
+  }
+
+  def isConsTraitSym(sym : Symbol) : Boolean = {
+    val resolved = getResolvedTypeSym(sym)
+    resolved == consSym
   }
 
 
@@ -177,6 +198,7 @@ trait Extractors {
 
           Some((name.toString, cd.symbol, args))
         }
+
         case _ => None
       }
     }
@@ -362,12 +384,14 @@ trait Extractors {
     object ExTupleExtract {
       def unapply(tree: Select) : Option[(Tree,Int)] = tree match {
         case Select(lhs, n) => {
+
           val methodName = n.toString
           if(methodName.head == '_') {
             val indexString = methodName.tail
             try {
               val index = indexString.toInt
               if(index > 0) {
+
                 Some((lhs, index))
               } else None
             } catch {
@@ -567,7 +591,9 @@ trait Extractors {
     // used for case classes selectors.
     object ExParameterlessMethodCall {
       def unapply(tree: Select): Option[(Tree,Name)] = tree match {
-        case Select(lhs, n) => Some((lhs, n))
+        //Treat Nil as a special case class ?
+        //Car and Cdr are parameterless Methods on case classes 
+        case Select(lhs, n) if( ! isNilTraitSym(tree.tpe.typeSymbol) && ! isListTraitSym(lhs.tpe.typeSymbol)) => Some((lhs, n))
         case _ => None
       }
     }
@@ -723,7 +749,7 @@ trait Extractors {
 
     object ExSetCard {
       def unapply(tree: Select): Option[Tree] = tree match {
-        case Select(t, n) if (n.toString == "size") => Some(t)
+        case Select(ExHasType(t,`setSym`), n) if (n.toString == "size") => Some(t)
         case _ => None
       }
     }
@@ -768,6 +794,7 @@ trait Extractors {
       }
     }
 
+
     object ExArrayLength {
       def unapply(tree: Select): Option[Tree] = tree match {
         case Select(ExHasType(t, `arraySym`), n) if n.toString == "length" => Some(t)
@@ -796,6 +823,65 @@ trait Extractors {
                manifest
              ) =>
             Some((baseType, length, defaultValue))
+        case _ => None
+      }
+    }
+
+
+    //List support
+    object ExFiniteList {
+      def unapply(tree: Apply): Option[(Tree,List[Tree])] = tree match {
+        case Apply(TypeApply(Select(Select(This(immutableName),listName), applyName), typeTree :: Nil),args) if(immutableName.toString == "immutable" && listName.toString == "List" && applyName.toString == "apply") =>
+          Some((typeTree, args))
+        case _ => None
+      }
+    }
+
+    object ExListLength {
+      def unapply(tree: Select): Option[Tree] = tree match {
+        case Select(ExHasType(t, `listSym`), n) if n.toString == "length" || n.toString == "size" => Some(t)
+        case _ => None
+      }
+    }
+
+    object ExNilList {
+      def unapply(tree: Select): Boolean = tree match {
+        case Select(This(immutableName), nilName) if(immutableName.toString == "immutable" && nilName.toString == "Nil") =>
+          true
+        case _ => false
+      }
+    }
+
+    object ExListCar {
+      def unapply(tree: Select): Option[Tree] = tree match {
+        case Select(t, headName) if(t.tpe.typeSymbol == listSym && headName.toString == "head") =>
+          Some(t)
+        case _ => None
+      }
+    }
+
+    object ExListCdr {
+      def unapply(tree: Select): Option[Tree] = tree match {
+        case Select(t, headName) if(t.tpe.typeSymbol == listSym && headName.toString == "tail") =>
+          Some(t)
+        case _ => None
+      }
+    }
+
+    object ExListCons {
+      def unapply(tree: Apply): Option[(Tree, Tree, List[Tree])] = tree match {
+        //Reversed lhs rhs
+        case Apply(TypeApply(Select(rhs,colonColon), typeTree :: Nil), lhs) if(colonColon.toString == "$colon$colon") =>
+          Some((rhs, typeTree, lhs))
+        case _ => None
+      }
+    }
+
+    object ExListConcat {
+      def unapply(tree: Apply): Option[(Tree, Tree, List[Tree])] = tree match {
+        //Reversed lhs rhs
+        case Apply(TypeApply(Select(rhs,colonColon), typeTree :: Nil), lhs) if(colonColon.toString == "$colon$colon$colon") =>
+          Some((rhs, typeTree, lhs))
         case _ => None
       }
     }

@@ -694,6 +694,19 @@ object TreeOps {
           val subTests = subps.zipWithIndex.map{case (p, i) => rec(TupleSelect(in, i+1).setType(tpes(i)), p)}
           And(bind(ob, in) +: subTests)
         }
+
+        case ListConsPattern(ob, subps) => {
+          // ???
+          val ListType(tp) = in.getType
+          assert(subps.size == 1)
+          val subTest = rec(Cdr(in).setType(ListType(tp)),subps(0))
+          And(Seq(bind(ob,in), subTest))
+        }
+
+        case NilPattern(_,_) => {
+          //???
+          BooleanLiteral(true)
+        }
       }
     }
 
@@ -1495,6 +1508,9 @@ object TreeOps {
               CaseClassPattern(newBinder, ccd, newSubPatterns)
             case TuplePattern(b, sub) =>
               TuplePattern(newBinder, newSubPatterns)
+            case NilPattern(_,_) => p
+            case ListConsPattern(b, sub) =>
+              ListConsPattern(newBinder, newSubPatterns)
           }
 
 

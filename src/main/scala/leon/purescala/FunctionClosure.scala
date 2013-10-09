@@ -171,6 +171,8 @@ object FunctionClosure extends TransformationPhase {
     case WildcardPattern(binder) => WildcardPattern(binder.map(id2freshId(_)))
     case CaseClassPattern(binder, caseClassDef, subPatterns) => CaseClassPattern(binder.map(id2freshId(_)), caseClassDef, subPatterns.map(freshIdInPat(_, id2freshId)))
     case TuplePattern(binder, subPatterns) => TuplePattern(binder.map(id2freshId(_)), subPatterns.map(freshIdInPat(_, id2freshId)))
+    case ListConsPattern(binder, subPatterns) => ListConsPattern(binder.map(id2freshId(_)), subPatterns.map(freshIdInPat(_, id2freshId)))
+    case NilPattern(_,_) => pat
   }
 
   //filter the list of constraints, only keeping those relevant to the set of variables

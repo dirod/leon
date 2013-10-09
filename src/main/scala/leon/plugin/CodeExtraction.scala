@@ -349,9 +349,14 @@ trait CodeExtraction extends Extractors {
         extractType(a.tpe) match {
           case TupleType(argsTpes) =>
             TuplePattern(binder, args.map(extractPattern(_)))
+          case ListType(tpe) =>
+            ListConsPattern(binder, args.map(extractPattern(_)))
           case _ =>
             unsupported(p, "Unsupported pattern")
         }
+      //This doesn't look safe
+      case p @ Select(This(_), nilName) if( nilName.toString == "Nil") =>
+        NilPattern()
 
       case _ =>
         unsupported(p, "Unsupported pattern")
@@ -376,6 +381,7 @@ trait CodeExtraction extends Extractors {
     }
 
     private def extractTree(tr: Tree): LeonExpr = {
+      //println("Extracting "+tr)
       val (current, tmpRest) = tr match {
         case Block(Block(e :: es1, l1) :: es2, l2) =>
           (e, Some(Block(es1 ++ Seq(l1) ++ es2, l2)))
@@ -390,19 +396,18 @@ trait CodeExtraction extends Extractors {
       var rest = tmpRest
 
       val res = current match {
-        case ExCaseObject(sym) =>
+        case ExCaseObject(sym) if( !isNilTraitSym(sym) ) =>
           classesToClasses.get(sym) match {
             case Some(ccd: CaseClassDef) =>
               CaseClass(ccd, Seq())
-
             case _ =>
               unsupported(tr, "Unknown case class "+sym.name)
           }
 
         case ExParameterlessMethodCall(t,n) if extractTree(t).getType.isInstanceOf[CaseClassType] =>
+          
           val selector = extractTree(t)
           val selType = selector.getType
-
           val selDef: CaseClassDef = selType.asInstanceOf[CaseClassType].classDef
 
           val fieldID = selDef.fields.find(_.id.name == n.toString) match {
@@ -431,6 +436,7 @@ trait CodeExtraction extends Extractors {
               TupleSelect(tupleExpr, index)
 
             case _ =>
+              
               unsupported(tr, "Invalid tupple access")
           }
 
@@ -854,7 +860,9 @@ trait CodeExtraction extends Extractors {
             case ArrayType(bt) =>
               assert(rargs.size == 1)
               ArraySelect(rlhs, rargs.head).setType(bt).setPosInfo(app.pos.line, app.pos.column)
-
+            case ListType(bt) =>
+              assert(rargs.size == 1)
+              ListAt(rlhs, rargs.head).setType(bt).setPosInfo(app.pos.line, app.pos.column)
             case _ =>
               unsupported(tr, "apply on unexpected type")
           }
@@ -888,6 +896,7 @@ trait CodeExtraction extends Extractors {
             case None =>
               unsupported(tr, "Both branches of ifthenelse have incompatible types")
           }
+
 
         case ExIsInstanceOf(tt, cc) => {
           val ccRec = extractTree(cc)
@@ -932,6 +941,39 @@ trait CodeExtraction extends Extractors {
           val rt: LeonType = rc.map(_.rhs.getType).reduceLeft(leastUpperBound(_,_).get)
           MatchExpr(rs, rc).setType(rt).setPosInfo(pm.pos.line,pm.pos.column)
 
+        case ExFiniteList(tt, args) =>
+          val tpe = extractType(tt.tpe)
+          FiniteList(args.map(extractTree(_))).setType(ListType(tpe))
+
+        case ExNilList() =>
+          //Bottom type for now should be changed once type is known!
+          NilList(BottomType)
+        
+        case ExListLength(t) =>
+          val rt = extractTree(t)
+          ListLength(rt)
+        
+        case ExListCar(t) =>
+          val rt = extractTree(t)
+          Car(rt).setType(ListType(rt.getType))
+
+        case ExListCdr(t) =>
+          val rt = extractTree(t)
+          Cdr(rt).setType(ListType(rt.getType))
+
+        case ExListCons(tList, tTyp, tArgs) =>
+          val btt = extractType(tTyp.tpe)
+          val rList = extractTree(tList)
+          val rArgs = tArgs map extractTree
+          assert(rArgs.size == 1)
+          Cons(rArgs(0), rList).setType(ListType(btt))
+
+        case ExListConcat(tList, tTyp, tArgs) =>
+          val btt = extractType(tTyp.tpe)
+          val rList = extractTree(tList)
+          val rArgs = tArgs map extractTree
+          assert(rArgs.size == 1)
+          Concat(rArgs(0), rList).setType(ListType(btt))
 
         // default behaviour is to complain :)
         case _ =>
@@ -986,8 +1028,15 @@ trait CodeExtraction extends Extractors {
       case TypeRef(_, sym, Nil) if classesToClasses contains sym =>
         classDefToClassType(classesToClasses(sym))
 
+      case TypeRef(_, sym, btt :: Nil) if isConsTraitSym(sym) =>
+        println()
+        ListType(extractType(btt))
+
       case SingleType(_, sym) if classesToClasses contains sym.moduleClass=>
         classDefToClassType(classesToClasses(sym.moduleClass))
+
+      case TypeRef(_, sym, btt :: Nil) if isListTraitSym(sym) =>
+        ListType(extractType(btt))
 
       case _ =>
         unsupported("Could not extract type as PureScala: "+tpt+" ("+tpt.getClass+")")
@@ -1030,6 +1079,4 @@ trait CodeExtraction extends Extractors {
         topLevelObjDef.map(obj => Program(programName, obj))
       }
     }
-
-
 }

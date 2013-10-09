@@ -29,6 +29,7 @@ object Extractors {
       case ArrayLength(a) => Some((a, ArrayLength))
       case ArrayClone(a) => Some((a, ArrayClone))
       case ArrayMake(t) => Some((t, ArrayMake))
+      case ListLength(t) => Some((t, ListLength))
       case (ue: UnaryExtractable) => ue.extract
       case _ => None
     }
@@ -70,6 +71,7 @@ object Extractors {
       case ArrayFill(t1, t2) => Some((t1, t2, ArrayFill))
       case ArraySelect(t1, t2) => Some((t1, t2, ArraySelect))
       case Concat(t1,t2) => Some((t1,t2,Concat))
+      case Cons(t1,t2) => Some((t1,t2,Concat))
       case ListAt(t1,t2) => Some((t1,t2,ListAt))
       case Let(binders, e, body) => Some((e, body, (e: Expr, b: Expr) => Let(binders, e, b)))
       case LetTuple(binders, e, body) => Some((e, body, (e: Expr, b: Expr) => LetTuple(binders, e, b)))
@@ -113,6 +115,7 @@ object Extractors {
       case FiniteMultiset(args) => Some((args, FiniteMultiset))
       case ArrayUpdated(t1, t2, t3) => Some((Seq(t1,t2,t3), (as: Seq[Expr]) => ArrayUpdated(as(0), as(1), as(2))))
       case FiniteArray(args) => Some((args, FiniteArray))
+      case FiniteList(args) => Some((args, FiniteList))
       case Distinct(args) => Some((args, Distinct))
       case Tuple(args) => Some((args, Tuple))
       case IfExpr(cond, thenn, elze) => Some((Seq(cond, thenn, elze), (as: Seq[Expr]) => IfExpr(as(0), as(1), as(2))))

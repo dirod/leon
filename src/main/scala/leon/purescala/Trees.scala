@@ -118,6 +118,7 @@ object Trees {
           case _ => true
         }))
         case t: TupleType => new MatchExpr(scrutinee, cases)
+        case t: ListType => new MatchExpr(scrutinee, cases)
         case _ => scala.sys.error("Constructing match expression on non-class type.")
       }
     }
@@ -177,6 +178,8 @@ object Trees {
   // We don't handle Seq stars for now.
 
   case class TuplePattern(binder: Option[Identifier], subPatterns: Seq[Pattern]) extends Pattern
+  case class ListConsPattern(binder: Option[Identifier], subPatterns: Seq[Pattern]) extends Pattern
+  case class NilPattern(binder: Option[Identifier] = None, subPatterns: Seq[Pattern] = Nil) extends Pattern
 
 
   /* Propositional logic */
@@ -563,7 +566,23 @@ object Trees {
   case class Car(list: Expr) extends Expr 
   case class Cdr(list: Expr) extends Expr 
   case class Concat(list1: Expr, list2: Expr) extends Expr 
-  case class ListAt(list: Expr, index: Expr) extends Expr 
+  case class ListAt(list: Expr, index: Expr) extends Expr with ScalacPositional with FixedType {
+    assert(list.getType.isInstanceOf[ListType], 
+      "The list value in ListAt must of of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
+    
+    val fixedType = list.getType match {
+      case ListType(base) =>
+        base
+      case _ =>
+        AnyType
+    }
+  }
+
+  case class ListLength(list : Expr) extends Expr with FixedType {
+    val fixedType = Int32Type
+  }
+
+  case class FiniteList(exprs: Seq[Expr]) extends Expr
 
   /* Constraint programming */
   case class Distinct(exprs: Seq[Expr]) extends Expr with FixedType {
