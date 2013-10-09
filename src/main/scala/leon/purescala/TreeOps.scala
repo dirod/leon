@@ -704,7 +704,7 @@ object TreeOps {
         }
 
         case NilPattern(_,_) => {
-          //???
+          // ???
           BooleanLiteral(true)
         }
       }
@@ -1508,7 +1508,8 @@ object TreeOps {
               CaseClassPattern(newBinder, ccd, newSubPatterns)
             case TuplePattern(b, sub) =>
               TuplePattern(newBinder, newSubPatterns)
-            case NilPattern(_,_) => p
+            case NilPattern(_,_) =>
+              NilPattern()
             case ListConsPattern(b, sub) =>
               ListConsPattern(newBinder, newSubPatterns)
           }

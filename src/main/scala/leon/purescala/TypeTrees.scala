@@ -107,6 +107,12 @@ object TypeTrees {
     case (BottomType,o2) => Some(o2)
     case (o1,AnyType) => Some(AnyType)
     case (AnyType,o2) => Some(AnyType)
+    case (ListType(to1), ListType(to2)) =>
+      val innerLub = leastUpperBound(to1,to2)
+      if(innerLub.isDefined)
+        Some(ListType(innerLub.get))
+      else
+        None
 
     case _ => None
   }

@@ -381,7 +381,6 @@ trait CodeExtraction extends Extractors {
     }
 
     private def extractTree(tr: Tree): LeonExpr = {
-      //println("Extracting "+tr)
       val (current, tmpRest) = tr match {
         case Block(Block(e :: es1, l1) :: es2, l2) =>
           (e, Some(Block(es1 ++ Seq(l1) ++ es2, l2)))
@@ -947,7 +946,7 @@ trait CodeExtraction extends Extractors {
 
         case ExNilList() =>
           //Bottom type for now should be changed once type is known!
-          NilList(BottomType)
+          NilList(BottomType).setType(ListType(BottomType))
         
         case ExListLength(t) =>
           val rt = extractTree(t)
@@ -1029,7 +1028,6 @@ trait CodeExtraction extends Extractors {
         classDefToClassType(classesToClasses(sym))
 
       case TypeRef(_, sym, btt :: Nil) if isConsTraitSym(sym) =>
-        println()
         ListType(extractType(btt))
 
       case SingleType(_, sym) if classesToClasses contains sym.moduleClass=>
