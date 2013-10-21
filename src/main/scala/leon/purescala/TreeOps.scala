@@ -698,9 +698,10 @@ object TreeOps {
         case ListConsPattern(ob, subps) => {
           // ???
           val ListType(tp) = in.getType
-          assert(subps.size == 1)
-          val subTest = rec(Cdr(in).setType(ListType(tp)),subps(0))
-          And(Seq(bind(ob,in), subTest))
+          assert(subps.length == 2)
+          val headTest = rec(Car(in).setType(tp), subps(0))
+          val tailTest = rec(Cdr(in).setType(ListType(tp)), subps(1))
+          And(Seq(bind(ob,in), headTest, tailTest))
         }
 
         case NilPattern(_,_) => {
@@ -740,6 +741,20 @@ object TreeOps {
           case None => map
         }
       }
+      case ListConsPattern(b, subps) => {
+        val ListType(tpe) = in.getType
+        assert(subps.size == 2)
+        val headMap = mapForPattern(Car(in).setType(tpe), subps(0))
+        val tailMap = mapForPattern(Cdr(in).setType(ListType(tpe)), subps(1))
+        val map = tailMap ++ headMap
+       
+        b match {
+          case Some(id) => map + (id -> in)
+          case None => map
+        }
+      }
+      case NilPattern(_, _) => Map.empty
+
     }
 
     def rewritePM(e: Expr) : Option[Expr] = e match {

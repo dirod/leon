@@ -202,7 +202,7 @@ object Extractors {
       val MatchExpr(scrutinee, cases) = e
       val sType = scrutinee.getType
 
-      if(sType.isInstanceOf[TupleType]) {
+      if(sType.isInstanceOf[TupleType] || sType.isInstanceOf[ListType]) {
         None
       } else if(sType.isInstanceOf[AbstractClassType]) {
         val cCD = sType.asInstanceOf[AbstractClassType].classDef

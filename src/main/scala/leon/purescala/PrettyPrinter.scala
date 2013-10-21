@@ -215,6 +215,17 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case ListLength(t) =>
       pp(t,lvl)
       sb.append(".length")
+    case ListAt(expr, index) =>
+      pp(expr,lvl)
+      sb.append("(")
+      pp(index,lvl)
+      sb.append(")")
+    case Cdr(expr) => 
+      pp(expr, lvl)
+      sb.append(".tail")
+    case Car(expr) =>
+      pp(expr, lvl)
+      sb.append(".head")
     case IfExpr(c, t, e) =>
       sb.append("if (")
       pp(c, lvl)
@@ -291,7 +302,7 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
 
     case (expr: PrettyPrintable) => expr.printWith(lvl, this)
 
-    case _ => sb.append("Expr?")
+    case _ => sb.append("Expr?"+tree.getClass)
   }
 
   // TYPE TREES
