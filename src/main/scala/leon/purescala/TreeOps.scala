@@ -1477,7 +1477,7 @@ object TreeOps {
           case (id, post) =>
             val nid = genId(id, newScope)
             val postScope = newScope.register(id -> nid)
-            (id, rec(post, postScope))
+            (nid, rec(post, postScope))
         }
 
         LetDef(newFd, rec(body, newScope))
@@ -1615,6 +1615,7 @@ object TreeOps {
       case Untyped | AnyType | BottomType | BooleanType | Int32Type | UnitType => None  
     }
 
+    var idMap     = Map[Identifier, Identifier]()
     var funDefMap = Map.empty[FunDef,FunDef]
 
     def fd2fd(funDef : FunDef) : FunDef = funDefMap.get(funDef) match {
@@ -1630,7 +1631,14 @@ object TreeOps {
             // These will be taken care of in the recursive traversal.
             fd.body = funDef.body
             fd.precondition = funDef.precondition
-            fd.postcondition = funDef.postcondition
+            funDef.postcondition match {
+              case Some((id, post)) =>
+                val freshId = FreshIdentifier(id.name, true).setType(rt)
+                idMap += id -> freshId
+                fd.postcondition = Some((freshId, post))
+              case None =>
+                fd.postcondition = None
+            }
             fd
         }
         funDefMap = funDefMap.updated(funDef, newFD)
@@ -1639,6 +1647,7 @@ object TreeOps {
 
     def pre(e : Expr) : Expr = e match {
       case Tuple(Seq()) => UnitLiteral
+      case Variable(id) if idMap contains id => Variable(idMap(id))
 
       case Tuple(Seq(s)) => pre(s)
 

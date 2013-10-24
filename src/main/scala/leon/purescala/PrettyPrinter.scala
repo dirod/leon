@@ -142,7 +142,7 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case SetUnion(l,r) => ppBinary(l, r, " \u222A ", lvl)        // \cup
     case MultisetUnion(l,r) => ppBinary(l, r, " \u222A ", lvl)   // \cup
     case MapUnion(l,r) => ppBinary(l, r, " \u222A ", lvl)        // \cup
-    case SetDifference(l,r) => ppBinary(l, r, " \\ ", lvl)       
+    case SetDifference(l,r) => ppBinary(l, r, " \\ ", lvl) 
     case MultisetDifference(l,r) => ppBinary(l, r, " \\ ", lvl)       
     case SetIntersection(l,r) => ppBinary(l, r, " \u2229 ", lvl) // \cap
     case MultisetIntersection(l,r) => ppBinary(l, r, " \u2229 ", lvl) // \cap
@@ -331,6 +331,14 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case TupleType(tpes) => ppNaryType(tpes, "(", ", ", ")", lvl)
     case ListType(tpe) => sb.append("List["); pp(tpe,lvl); sb.append("]")
     case c: ClassType => sb.append(c.classDef.id)
+    case FunctionType(fts, tt) => {
+      if (fts.size > 1)
+        ppNaryType(fts, "(", ", ", ")", lvl)
+      else if (fts.size == 1)
+        pp(fts.head, lvl)
+      sb.append(" => ")
+      pp(tt, lvl)
+    }
     case _ => sb.append("Type?")
   }
 

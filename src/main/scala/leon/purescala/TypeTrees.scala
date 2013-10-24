@@ -107,6 +107,13 @@ object TypeTrees {
     case (BottomType,o2) => Some(o2)
     case (o1,AnyType) => Some(AnyType)
     case (AnyType,o2) => Some(AnyType)
+    case (TupleType(to1), TupleType(to2)) =>
+      val innerLubs = to1.zip(to2).map(p => leastUpperBound(p._1,p._2))
+      if(innerLubs.forall(_.isDefined))
+        Some(TupleType(innerLubs.map(_.get)))
+      else
+        None
+
     case (ListType(to1), ListType(to2)) =>
       val innerLub = leastUpperBound(to1,to2)
       if(innerLub.isDefined)
@@ -114,7 +121,7 @@ object TypeTrees {
       else
         None
 
-    case _ => None
+    case _ =>  None
   }
 
   def leastUpperBound(ts: Seq[TypeTree]): Option[TypeTree] = {
@@ -160,6 +167,16 @@ object TypeTrees {
       case (InfiniteSize,_) => InfiniteSize
       case (_,InfiniteSize) => InfiniteSize
       case (FiniteSize(n),FiniteSize(m)) => FiniteSize(scala.math.pow(m+1, n).toInt)
+    }
+    case FunctionType(fts, tt) => {
+      val fromSizes = fts map domainSize
+      val toSize = domainSize(tt)
+      if (fromSizes.exists(_ == InfiniteSize) || toSize == InfiniteSize)
+        InfiniteSize
+      else {
+        val n = toSize.asInstanceOf[FiniteSize].size
+        FiniteSize(scala.math.pow(n, fromSizes.foldLeft(1)((acc, s) => acc * s.asInstanceOf[FiniteSize].size)).toInt)
+      }
     }
     case c: ClassType => InfiniteSize
   }
@@ -211,6 +228,7 @@ object TypeTrees {
   case class SetType(base: TypeTree) extends TypeTree
   case class MultisetType(base: TypeTree) extends TypeTree
   case class MapType(from: TypeTree, to: TypeTree) extends TypeTree
+  case class FunctionType(from: List[TypeTree], to: TypeTree) extends TypeTree
   case class ArrayType(base: TypeTree) extends TypeTree
 
   sealed abstract class ClassType extends TypeTree {
