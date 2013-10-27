@@ -864,6 +864,7 @@ trait Extractors {
     object ExNilList {
       def unapply(tree: Select): Boolean = tree match {
         case Select(This(immutableName), nilName) if(immutableName.toString == "immutable" && nilName.toString == "Nil") =>
+          println(tree.tpe.typeSymbol)
           true
         case _ => false
       }

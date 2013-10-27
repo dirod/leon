@@ -33,4 +33,13 @@ object Utils {
   def choose[A, B, C, D, E](predicate: (A, B, C, D, E) => Boolean): (A, B, C, D, E) = noChoose
 
   def error[T](reason: String): T = sys.error(reason)
+
+  /*
+  * Two relations ot the FLS logic in
+  * Deciding Funcitonal Lists with Sublist Setes
+  */
+  //Greatest common suffix
+  def gcs[A](lhs: List[A], rhs: List[A]): List[A] = throw new RuntimeException("Implementation not supported")
+
+  def isSubList[A](lhs: List[A], rhs: List[A]): Boolean = throw new RuntimeException("Implementation not supported")
 }

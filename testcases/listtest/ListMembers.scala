@@ -102,16 +102,13 @@ object ListMembers {
     list match {
       case Nil => (Nil, Nil)
       case x :: xs if(n > 0) => 
-        // val (lhs, rhs) = splitAt(xs, n-1)
-        // (x :: lhs, rhs)
-        splitAt(xs, n-1)
+        val (lhs, rhs) = splitAt(xs, n-1)
+        (x :: lhs, rhs)
       case x :: xs if(n <= 0) =>
-        // val (lhs,rhs) = splitAt(xs, n-1)
-        // (lhs, x :: rhs)
-        splitAt(xs, n-1)
-
+        val (lhs,rhs) = splitAt(xs, n-1)
+        (lhs, x :: rhs)
     }
-  }
+  } ensuring( res => res._1 == dropRight(list, n) && res._2 == drop(list, n - 1))
 
   def zip(lhs : List[Int], rhs : List[Int]): List[(Int,Int)] = {
     (lhs, rhs) match {

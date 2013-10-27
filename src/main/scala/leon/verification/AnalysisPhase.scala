@@ -70,6 +70,8 @@ object AnalysisPhase extends LeonPhase[Program,VerificationReport] {
       val funDef = vcInfo.funDef
       val vc = vcInfo.condition
 
+      println(vcs)
+
       reporter.info("Now considering '" + vcInfo.kind + "' VC for " + funDef.id + "...")
       reporter.debug("Verification condition (" + vcInfo.kind + ") for ==== " + funDef.id + " ====")
       reporter.debug(simplifyLets(vc))
