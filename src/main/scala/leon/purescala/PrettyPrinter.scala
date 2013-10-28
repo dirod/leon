@@ -101,6 +101,12 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
       pp(pred, lvl)
       sb.append(")")
 
+    case IsSubList(t1,t2) =>
+      ppBinary(t1, t2," \u2aaf ", lvl)
+
+    case Gcs(t1,t2) =>
+      ppBinary(t1, t2, " \u2a05 ", lvl)
+
     case CaseClass(cd, args) =>
       sb.append(idToString(cd.id))
       if (cd.isCaseObject) {
@@ -266,6 +272,17 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
           })
           ppc(subPatterns.last)
           sb.append(")")
+        }
+        case ListConsPattern(bndr, subPatterns) => {
+          bndr.foreach(b => sb.append(b + " @ "))
+          subPatterns.init.foreach(p => {
+            ppc(p)
+            sb.append(" :: ")
+          })
+          ppc(subPatterns.last)
+        }
+        case NilPattern(_,_) => {
+          sb.append("Nil")
         }
         case _ => sb.append("Pattern?")
       }

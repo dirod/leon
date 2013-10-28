@@ -75,6 +75,8 @@ object Extractors {
       case ListAt(t1,t2) => Some((t1,t2,ListAt))
       case Let(binders, e, body) => Some((e, body, (e: Expr, b: Expr) => Let(binders, e, b)))
       case LetTuple(binders, e, body) => Some((e, body, (e: Expr, b: Expr) => LetTuple(binders, e, b)))
+      case IsSubList(t1,t2) => Some((t1,t2, IsSubList))
+      case Gcs(t1,t2) => Some((t1,t2, Gcs))
       case (ex: BinaryExtractable) => ex.extract
       case _ => None
     }

@@ -588,6 +588,24 @@ object Trees {
     }
   }
 
+  //Greatest common sublist
+  case class Gcs(list1: Expr, list2: Expr) extends Expr with ScalacPositional with FixedType {
+
+    val fixedType = list1.getType match {
+      case ListType(base) =>
+        ListType(base)
+      case _ =>
+        AnyType
+    }
+
+  }
+
+  case class IsSubList(list1: Expr, list2: Expr) extends Expr with ScalacPositional with FixedType {
+
+    val fixedType = BooleanType
+
+  }
+
   case class ListLength(list : Expr) extends Expr with FixedType {
     val fixedType = Int32Type
   }

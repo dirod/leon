@@ -630,6 +630,14 @@ trait CodeExtraction extends Extractors {
 
           Choose(vars, cBody).setPosInfo(select.pos)
 
+        case ExGCSExpression((lhs, rhs), tpe) =>
+          val innerType = extractType(tpe)
+          val nLhs = extractTree(lhs)
+          val nRhs = extractTree(rhs)
+
+          Gcs(nLhs, nRhs)
+        case ExIsSublistExpression(lhs, rhs) => IsSubList(extractTree(lhs), extractTree(rhs))
+        
         case ExCaseClassConstruction(tpt, args) =>
           extractType(tpt.tpe) match {
             case cct: CaseClassType =>

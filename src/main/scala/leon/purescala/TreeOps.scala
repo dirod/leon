@@ -696,17 +696,20 @@ object TreeOps {
         }
 
         case ListConsPattern(ob, subps) => {
-          // ???
+     
           val ListType(tp) = in.getType
           assert(subps.length == 2)
+          val lengthCond = GreaterThan(ListLength(in), IntLiteral(0))
           val headTest = rec(Car(in).setType(tp), subps(0))
           val tailTest = rec(Cdr(in).setType(ListType(tp)), subps(1))
-          And(Seq(bind(ob,in), headTest, tailTest))
+          val andTest = And(Seq(bind(ob,in), headTest, tailTest,lengthCond))
+          andTest
+          
         }
 
         case NilPattern(_,_) => {
           // ???
-          BooleanLiteral(true)
+          Equals(ListLength(in),IntLiteral(0))
         }
       }
     }

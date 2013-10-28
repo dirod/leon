@@ -279,6 +279,25 @@ trait Extractors {
       }
     }
 
+    object ExGCSExpression {
+      def unapply(tree: Apply): Option[((Tree, Tree), Type)] = tree match {
+        case Apply(
+              TypeApply(ExSelected("leon", "Utils", "gcs") ,
+              typeTree :: Nil), lhs :: rhs :: Nil) =>
+            Some(((lhs, rhs), typeTree.tpe))
+        case _ => None
+      }
+    }
+
+    object ExIsSublistExpression {
+      def unapply(tree: Apply): Option[(Tree, Tree)] = tree match {
+        case Apply(TypeApply(ExSelected("leon","Utils","isSubList"), _ ), lhs :: rhs :: Nil) =>
+          Some((lhs,rhs))
+
+        case _ => None
+      }
+    }
+
     object ExWaypointExpression {
       def unapply(tree: Apply) : Option[(Type, Tree, Tree)] = tree match {
         case Apply(
@@ -864,7 +883,6 @@ trait Extractors {
     object ExNilList {
       def unapply(tree: Select): Boolean = tree match {
         case Select(This(immutableName), nilName) if(immutableName.toString == "immutable" && nilName.toString == "Nil") =>
-          println(tree.tpe.typeSymbol)
           true
         case _ => false
       }
