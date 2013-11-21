@@ -1,21 +1,29 @@
 import leon.Utils._
 
 object FLS {
-  def isEmpty(f : List[Int]): Boolean = {
-    f match {
-      case x :: y  => false
-      case Nil => true
-    }
-  }ensuring( res => res == (f.length == 0)) 
-	// def drop(n: Int, xs: List[Int]): List[Int] = {
-	// 	if(n <= 0) xs
-	// 	else xs match {
- //      case Nil => Nil
- //      case x :: ys => drop(n-1, ys)
- //    } 
-	// } ensuring (zs => ( (!(n < 0)) || zs == xs) &&
- //                    ((!(n >= 0 && xs.length < n)) || zs == Nil) &&
- //                    (( (!(n >= 0 && xs.length >= n)) || isSubList(zs,xs)) && (zs.length == xs.length - n)))
+//   def tail(f : List[Int]): List[Int] ={ 
+//     f match {
+//       case x :: xs => xs
+//       case x :: Nil => Nil
+//       case Nil => Nil
+//     }
+//   }ensuring(res => isSubList(res, f))
+
+  // def isEmpty(f : List[Int]): Boolean = {
+  //   f match {
+  //     case x :: y  => false
+  //     case Nil => true
+  //   }
+  // }ensuring( res => res == (f.length == 0)) 
+	def drop(n: Int, xs: List[Int]): List[Int] = {
+		if(n <= 0) xs
+		else xs match {
+      case Nil => Nil
+      case x :: ys => drop(n-1, ys)
+    } 
+	} ensuring (zs => ( (!(n < 0)) || zs == xs) &&
+                    ((!(n >= 0 && xs.length < n)) || zs == Nil) &&
+                    (( (!(n >= 0 && xs.length >= n)) || isSubList(zs,xs)) && (zs.length == xs.length - n)))
 
   // def gcsredef(xs: List[Int], lxs: Int, ys: List[Int], lys: Int): (List[Int], Int) = {
   //   require(xs.length == lxs && ys.length == lys)

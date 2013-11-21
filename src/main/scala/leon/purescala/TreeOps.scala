@@ -668,6 +668,22 @@ object TreeOps {
     }
   }
 
+  def consPatternToCons(in: Expr, pattern: Pattern): Option[Expr] = {
+    val ListType(innerType) = in.getType
+    def consPatternToCons0(pattern: Pattern): Option[Expr] = pattern match {
+      case ListConsPattern(ob, Seq(WildcardPattern(Some(x)), xs)) =>
+        consPatternToCons0(xs) match {
+          case Some(nXs) => Some(Cons(Variable(x), nXs).setType(ListType(innerType)))
+          case None => None
+        }
+      case NilPattern(_,_) => Some(NilList(innerType))
+      case WildcardPattern(Some(x)) => Some(Variable(x))
+      case _ => None
+    }
+    consPatternToCons0(pattern)
+  }
+
+
   def conditionForPattern(in: Expr, pattern: Pattern, includeBinders: Boolean = false) : Expr = {
     def bind(ob: Option[Identifier], to: Expr): Expr = {
       if (!includeBinders) {
@@ -676,6 +692,8 @@ object TreeOps {
         ob.map(id => Equals(Variable(id), to)).getOrElse(BooleanLiteral(true))
       }
     }
+
+
 
     def rec(in: Expr, pattern: Pattern): Expr = {
       pattern match {
@@ -696,20 +714,29 @@ object TreeOps {
         }
 
         case ListConsPattern(ob, subps) => {
-     
           val ListType(tp) = in.getType
           assert(subps.length == 2)
-          val lengthCond = GreaterThan(ListLength(in), IntLiteral(0))
+          // This adds Cons constructs. 
+          // More readable, but less useful for LFS decision procedure
+          // consPatternToCons(in, pattern) match {
+          //   case Some(expr) => Equals(in, expr)
+          //   case None =>
+          //      val lengthCond = GreaterThan(ListLength(in), IntLiteral(0))
+          //      val headTest = rec(Car(in).setType(tp), subps(0))
+          //      val tailTest = rec(Cdr(in).setType(ListType(tp)), subps(1))
+          //      And(Seq(bind(ob,in), headTest, tailTest,lengthCond))
+          // }
+          val nilTest = Not(Equals(in, NilList(tp)))
           val headTest = rec(Car(in).setType(tp), subps(0))
           val tailTest = rec(Cdr(in).setType(ListType(tp)), subps(1))
-          val andTest = And(Seq(bind(ob,in), headTest, tailTest,lengthCond))
-          andTest
-          
+
+          And(bind(ob, in) +: Seq(nilTest, headTest, tailTest))
         }
 
         case NilPattern(_,_) => {
           // ???
-          Equals(ListLength(in),IntLiteral(0))
+          val ListType(tp) = in.getType
+          Equals(in,NilList(tp))
         }
       }
     }
@@ -744,17 +771,33 @@ object TreeOps {
           case None => map
         }
       }
-      case ListConsPattern(b, subps) => {
+      case p @ ListConsPattern(b, subps) => {
         val ListType(tpe) = in.getType
         assert(subps.size == 2)
-        val headMap = mapForPattern(Car(in).setType(tpe), subps(0))
-        val tailMap = mapForPattern(Cdr(in).setType(ListType(tpe)), subps(1))
-        val map = tailMap ++ headMap
+        // This is not useful if pattern deconstruction is not kept during conditionForPattern
+        // More readable, but less useful for LFS decision procedure
+        // consPatternToCons(in, p) match {
+        //   case Some(x) => Map.empty
+        //   case None => {
+        //     val headMap = mapForPattern(Car(in).setType(tpe), subps(0))
+        //     val tailMap = mapForPattern(Cdr(in).setType(ListType(tpe)), subps(1))
+        //     val map = tailMap ++ headMap
        
+        //     b match {
+        //       case Some(id) => map + (id -> in)
+        //       case None => map
+        //     }
+        //   }
+        // }
+        val mapForHead = mapForPattern(Car(in).setType(tpe), subps(0))
+        val mapForTail = mapForPattern(Cdr(in).setType(ListType(tpe)), subps(1))
+        val map = mapForHead ++ mapForTail
         b match {
           case Some(id) => map + (id -> in)
-          case None => map
+          case None => map 
         }
+        
+
       }
       case NilPattern(_, _) => Map.empty
 
@@ -1853,6 +1896,48 @@ object TreeOps {
     case _ =>
       false
   }
+  //Transforms the VCs containing lists into their FLS equivalent
+  //For now, only flat lists are accepted
+  def toFLS(expr: Expr): Expr = {
+    // def toFLS0(expr : Expr, sigmas : Set[Variable]): Set[Variable] = expr match {
+    //     case v @ Variable(x) => v.getType match {
+    //       case ListType(_) => sigmas + v
+    //       case _ => sigmas
+    //     }
+    //     case UnaryOperator(e, cons) => 
+    //       toFLS0(e, sigmas)
+    //     case BinaryOperator(lhs, rhs, cons) =>
+    //       toFLS0(lhs, sigmas) ++ toFLS0(rhs, sigmas)
+    //     case NAryOperator(seq, cons) => 
+    //       seq.map(toFLS0(_, sigmas)).foldLeft(Set[Variable]())(_ ++ _)
+    //     case e : Terminal => Set()
+    // }
+
+    val listVars = variablesOf(expr).filter(_.getType match {case ListType(base) => true; case _ => false})
+
+    val listVarToSublistSetVar = listVars.map(v => {
+      val ListType(innerType) = v.getType;
+      val freshId = FreshIdentifier(v.name.toUpperCase).setType(SetType(ListType(innerType)))
+      v -> freshId
+    }).toMap
+
+    val s : Map[Expr,Expr] = listVars.map(p => {
+      val sigma = Sigma(Variable(p))
+      val freshVar = Variable(FreshIdentifier(p.name.toUpperCase)).setType(sigma.getType)
+      freshVar -> sigma
+    }).toMap
+
+    val nExpr = replace(s, expr)
+
+
+    val alphaDefs = listVarToSublistSetVar.map(p => {
+        Equals(Variable(p._2), Sigma(Variable(p._1)))
+      }).toList
+
+    And(s.map(p => Equals(p._1,p._2)).toList ++ Seq(nExpr))
+  }
+
+
 
   def containsLetDef(expr: Expr): Boolean = {
     def convert(t : Expr) : Boolean = t match {

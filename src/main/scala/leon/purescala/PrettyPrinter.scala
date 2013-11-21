@@ -232,6 +232,22 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case Car(expr) =>
       pp(expr, lvl)
       sb.append(".head")
+    case Cons(lhs, rhs) =>
+      pp(lhs, lvl)
+      sb.append(" :: ")
+      pp(rhs, lvl)
+    case Concat(lhs, rhs) =>
+      pp(lhs, lvl)
+      sb.append(" ::: ")
+      pp(rhs, lvl)
+    case Sigma(s) =>
+      sb.append("\u03c3(") //small sigma
+      pp(s, lvl)
+      sb.append(")")
+    case Tau(s) =>
+      sb.append("\u03c4(") //small tau
+      pp(s, lvl)
+      sb.append(")")
     case IfExpr(c, t, e) =>
       sb.append("if (")
       pp(c, lvl)

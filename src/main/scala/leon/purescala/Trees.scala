@@ -575,10 +575,15 @@ object Trees {
   case class Cons(head: Expr, tail: Expr) extends Expr 
   case class Car(list: Expr) extends Expr 
   case class Cdr(list: Expr) extends Expr 
-  case class Concat(list1: Expr, list2: Expr) extends Expr 
+  case class Concat(list1: Expr, list2: Expr) extends Expr
+  case class ListLength(list : Expr) extends Expr with FixedType {
+    val fixedType = Int32Type
+  }
+
+  case class FiniteList(exprs: Seq[Expr]) extends Expr
   case class ListAt(list: Expr, index: Expr) extends Expr with ScalacPositional with FixedType {
     assert(list.getType.isInstanceOf[ListType], 
-      "The list value in ListAt must of of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
+      "The list value in ListAt must of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
     
     val fixedType = list.getType match {
       case ListType(base) =>
@@ -588,33 +593,68 @@ object Trees {
     }
   }
 
+  /* Constraint programming */
+  case class Distinct(exprs: Seq[Expr]) extends Expr with FixedType {
+    val fixedType = BooleanType
+  }
+
+  /* FLS2 Trees*/
+
   //Greatest common sublist
   case class Gcs(list1: Expr, list2: Expr) extends Expr with ScalacPositional with FixedType {
-
+    assert(list1.getType.isInstanceOf[ListType] && list2.getType.isInstanceOf[ListType], 
+      "The lists values in gcs must of list type; yet we got [%s] x [%s]. In exprs: \n%s \n%s".format(list1.getType, list2.getType, list1, list2))
     val fixedType = list1.getType match {
       case ListType(base) =>
         ListType(base)
       case _ =>
         AnyType
     }
-
   }
-
+  // In FLS context, this mean all the suffix of the list
   case class IsSubList(list1: Expr, list2: Expr) extends Expr with ScalacPositional with FixedType {
-
-    val fixedType = BooleanType
-
-  }
-
-  case class ListLength(list : Expr) extends Expr with FixedType {
-    val fixedType = Int32Type
-  }
-
-  case class FiniteList(exprs: Seq[Expr]) extends Expr
-
-  /* Constraint programming */
-  case class Distinct(exprs: Seq[Expr]) extends Expr with FixedType {
     val fixedType = BooleanType
   }
+
+  //Set of list's content
+  case class Tau(list: Expr) extends Expr with FixedType {
+    assert(list.getType.isInstanceOf[ListType],
+      "The list value in Tau must be of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
+    val fixedType = list.getType match {
+      case ListType(base) =>
+        SetType(base)
+      case _ =>
+        AnyType
+    }
+  }
+
+  //Set of list's sublists
+  case class Sigma(list: Expr) extends Expr with FixedType {
+    assert(list.getType.isInstanceOf[ListType],
+      "The list value in Alpha must be of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
+
+    val fixedType = list.getType match {
+      case ListType(base) =>
+        SetType(ListType(base))
+      case _ =>
+        AnyType
+    }
+  }
+
+  //Head on subLists sets
+  case class HeadFLS(sublistSet: Expr) extends Expr with FixedType {
+    assert(sublistSet.getType match { case SetType(ListType(base)) => true ; case _ => false},
+      "The sublistSet value in Alpha must be of set(list) type; yet we got [%s]. In expr: \n%s".format(sublistSet.getType, sublistSet))
+
+    val fixedType = sublistSet.getType match {
+      case SetType(ListType(base)) =>
+        SetType(base)
+      case _ => 
+        AnyType
+    }
+  }
+
+
+
 
 }

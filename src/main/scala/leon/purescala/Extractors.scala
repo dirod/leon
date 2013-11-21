@@ -71,7 +71,7 @@ object Extractors {
       case ArrayFill(t1, t2) => Some((t1, t2, ArrayFill))
       case ArraySelect(t1, t2) => Some((t1, t2, ArraySelect))
       case Concat(t1,t2) => Some((t1,t2,Concat))
-      case Cons(t1,t2) => Some((t1,t2,Concat))
+      case Cons(t1,t2) => Some((t1,t2,Cons))
       case ListAt(t1,t2) => Some((t1,t2,ListAt))
       case Let(binders, e, body) => Some((e, body, (e: Expr, b: Expr) => Let(binders, e, b)))
       case LetTuple(binders, e, body) => Some((e, body, (e: Expr, b: Expr) => LetTuple(binders, e, b)))
