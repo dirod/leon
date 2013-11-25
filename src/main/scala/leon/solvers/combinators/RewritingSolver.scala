@@ -10,7 +10,7 @@ import purescala.Trees._
 import purescala.TreeOps._
 import purescala.TypeTrees._
 
-abstract class RewritingSolver[+S <: Solver, T](underlying: S) {
+abstract class RewritingSolver[+S <: Solver, T](underlying: S) extends Solver{
   val context = underlying.context
 
   /** The type T is used to encode any meta information useful, for instance, to reconstruct
@@ -20,6 +20,15 @@ abstract class RewritingSolver[+S <: Solver, T](underlying: S) {
   def reconstructModel(model : Map[Identifier,Expr], meta : T) : Map[Identifier,Expr]
 
   private var storedMeta : List[T] = Nil
+
+  def free(): Unit = {
+    storedMeta = Nil
+    underlying.free
+  }
+
+  def check(): Option[Boolean] = {
+    underlying.check
+  }
 
   def assertCnstr(expression : Expr) {
     val (rewritten, meta) = rewriteCnstr(expression)

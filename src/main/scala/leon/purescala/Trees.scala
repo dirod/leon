@@ -312,6 +312,7 @@ object Trees {
 
     override def equals(that: Any): Boolean = (that != null) && (that match {
       case t: Iff => t.left == left
+      case t: Implies => t.left == left && t.right == right
       case _ => false
     })
 
