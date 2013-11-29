@@ -30,6 +30,7 @@ object Extractors {
       case ArrayClone(a) => Some((a, ArrayClone))
       case ArrayMake(t) => Some((t, ArrayMake))
       case ListLength(t) => Some((t, ListLength))
+      case Sigma(t) => Some((t, Sigma))
       case (ue: UnaryExtractable) => ue.extract
       case _ => None
     }

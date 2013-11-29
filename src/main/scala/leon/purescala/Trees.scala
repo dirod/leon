@@ -572,10 +572,29 @@ object Trees {
   }
 
   /* List operations */
-  case class NilList(baseType: TypeTree) extends Expr with Terminal
+  case class NilList(baseType: TypeTree) extends Expr with Terminal with FixedType {
+    val fixedType = ListType(baseType)
+  }
   case class Cons(head: Expr, tail: Expr) extends Expr 
-  case class Car(list: Expr) extends Expr 
-  case class Cdr(list: Expr) extends Expr 
+  case class Car(list: Expr) extends Expr with FixedType {
+    assert(list.getType.isInstanceOf[ListType], 
+      "The list value in Car must of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
+
+    val fixedType = list.getType match {
+      case ListType(base) =>
+        base
+      case _ =>
+        AnyType
+    }
+
+  }
+  case class Cdr(list: Expr) extends Expr with FixedType {
+    assert(list.getType.isInstanceOf[ListType], 
+      "The list value in Cdr must of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
+
+    val fixedType = list.getType
+
+  }
   case class Concat(list1: Expr, list2: Expr) extends Expr
   case class ListLength(list : Expr) extends Expr with FixedType {
     val fixedType = Int32Type
@@ -614,6 +633,9 @@ object Trees {
   }
   // In FLS context, this mean all the suffix of the list
   case class IsSubList(list1: Expr, list2: Expr) extends Expr with ScalacPositional with FixedType {
+    assert(list1.getType.isInstanceOf[ListType] && list2.getType.isInstanceOf[ListType], 
+      "The lists values in IsSublist must of list type; yet we got [%s] x [%s]. In exprs: \n%s \n%s".format(list1.getType, list2.getType, list1, list2))
+
     val fixedType = BooleanType
   }
 
@@ -632,7 +654,7 @@ object Trees {
   //Set of list's sublists
   case class Sigma(list: Expr) extends Expr with FixedType {
     assert(list.getType.isInstanceOf[ListType],
-      "The list value in Alpha must be of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
+      "The list value in Sigma must be of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
 
     val fixedType = list.getType match {
       case ListType(base) =>
