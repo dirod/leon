@@ -93,6 +93,10 @@ trait AbstractZ3Solver
   protected[leon] var tupleConstructors: Map[TypeTree, Z3FuncDecl] = Map.empty
   protected[leon] var tupleSelectors: Map[TypeTree, Seq[Z3FuncDecl]] = Map.empty
 
+  protected[leon] var listSorts: Map[TypeTree, Z3Sort] = Map.empty
+  protected[leon] var listConsNilConstructors: Map[TypeTree, Seq[Z3FuncDecl]] = Map.empty
+  protected[leon] var listSelectors: Map[TypeTree, Seq[Z3FuncDecl]] = Map.empty
+
   protected[leon] var arraySorts: Map[TypeTree, Z3Sort] = Map.empty
   protected[leon] var arrayTupleCons: Map[TypeTree, Z3FuncDecl] = Map.empty
   protected[leon] var arrayTupleSelectorArray: Map[TypeTree, Z3FuncDecl] = Map.empty
@@ -333,6 +337,32 @@ trait AbstractZ3Solver
         newSetSort
       }
     }
+    case ListType(base) => listSorts.get(base) match {
+      case Some(s) => s
+      case None => {
+        import Z3Context.{ADTSortReference, RecursiveType, RegularSort}
+        val newlistADT = z3.mkADTSorts(
+          Seq(
+              (
+                base.toString + "List",
+              Seq(base.toString + "Cons", base.toString + "Nil"),
+              Seq(
+                Seq(("head", RegularSort(typeToSort(base))), ("tail", RecursiveType(0))),
+                Seq()
+              )
+            )
+          )
+        )
+        newlistADT match { 
+          case Seq((listSort, cons @ Seq(consCons, nilCons), Seq(consTester, nilTester), Seq(sels @ Seq(headSelector, tailSelector), Seq()))) =>
+            listSorts = listSorts + (base -> listSort)
+            listConsNilConstructors = listConsNilConstructors + (base -> cons)
+            listSelectors = listSelectors + (base -> sels)
+            listSort
+        }
+
+      }
+    }
     case mt @ MapType(fromType, toType) => mapSorts.get(mt) match {
       case Some(s) => s
       case None => {
@@ -491,6 +521,11 @@ trait AbstractZ3Solver
         case f @ FunctionInvocation(fd, args) => {
           z3.mkApp(functionDefToDecl(fd), args.map(rec(_)): _*)
         }
+
+        case NilList(base) => {
+          val constructor = listConsNilConstructors(base)
+          constructor(1)()
+        }
         
         case SetEquals(s1, s2) => z3.mkEq(rec(s1), rec(s2))
         case ElementOfSet(e, s) => z3.mkSetSubset(z3.mkSetAdd(z3.mkEmptySet(typeToSort(e.getType)), rec(e)), rec(s))
@@ -629,6 +664,11 @@ trait AbstractZ3Solver
           }
         }
         array
+      }
+      case Some(ListType(dt)) => {
+        val Z3AppAST(decl, args) = z3.getASTKind(t)
+        //Not sure of that :P
+        NilList(dt)
       }
       case other => 
         if(t == unitValue) 

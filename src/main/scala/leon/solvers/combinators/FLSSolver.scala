@@ -29,19 +29,40 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
   
   def name = "FLS Solver"
 
-  type SublistSetVariable = Variable
+  val reporter = context.reporter
+
+  def debugMess(title : String, content : String): Unit = {
+    val largebar = "="*40
+    val smallbar = "-"*40
+    reporter.debug(largebar)
+    reporter.debug(title)
+    reporter.debug(smallbar)
+    reporter.debug(content)
+    reporter.debug(largebar)
+  }
+
+  def debugMess(title : String, content : Set[Expr], sep: String = "\n"): Unit = {
+    debugMess(title, content.mkString(sep))
+  }
+
+  var origParamIDs: Set[Identifier] = Set()
+  
+
+  
+
+  type SublistSetID = Identifier
   //This contains the maping between a list variable and it's set of subLists
-  private var sigmaMap : Map[Variable,SublistSetVariable] = Map()
+  private var sigmaMap : Map[Expr,SublistSetID] = Map()
+  private var count = 0
+  private var revSigmaMap : Map[SublistSetID, Expr] = Map()
 
-  private def toSetOfSubLists(v : Variable): Option[SublistSetVariable] = sigmaMap.get(v)
-
-  private def defNewSublistSetVar(v : Variable): SublistSetVariable = sigmaMap.get(v) match {
+  private def sublistSetVar(v : Expr): SublistSetID = sigmaMap.get(v) match {
     case Some(v) => v
     case None => {
-      val freshID = FreshIdentifier(v.id.name.toUpperCase, true).setType(SetType(v.getType))
-      val freshVariable = Variable(freshID)
-      sigmaMap += (v->freshVariable)
-      freshVariable
+      val freshID = FreshIdentifier("S"+count, true).setType(SetType(v.getType))
+      count += 1
+      sigmaMap += (v->freshID)
+      freshID
     }
   } 
 
@@ -51,9 +72,9 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
    * @param expression The negated VC 
    * @return An expression without Cons constructs
    */
-  private def elimCons(expression: Expr): Expr = {
+  private def elimCons(expr: Expr): Expr = {
     //Assuming there is no Cons yet
-    expression
+    expr
   }
 
   /** This returns the set of ground subterms of the clause
@@ -108,6 +129,7 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
       case Not(e) => Not(pre(e))
       case _ => expr
     }
+  
     
     toCNF(simplePreTransform(pre)(expression)) match {
       case And(seq) => seq.toSet
@@ -147,6 +169,10 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
     K_e.map(instantiateAxiom(groundSubTerms,_)).flatten
   }
 
+  /**This instantiates the axioms.
+    @param the verification conditions
+    @return  an Axiom
+  */
   private def instantiateAxiom(sts : Set[Expr], axiom : Axiom): Set[Expr] = {
     def crossSelf2(s : Set[Expr]): Set[(Expr, Expr)] = {
       (for(e0 <- s; e1 <- s if(e0 != e1)) yield Set((e0, e1), (e1, e0))).flatten
@@ -167,13 +193,37 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
         crossSelf3(sts).map(axiom(_))
     }
   }
+
+  private def aliasSublistSets(setCnstrs : Set[Expr]): Set[Expr] = {
+
+    //Pre transform
+    def aliasSigma(cnstr : Expr): Expr = cnstr match {
+      case Sigma(e) => Variable(sublistSetVar(e))
+      case _ => cnstr
+    }
+
+    //Post transform
+    def aliasHeadsTails(cnstr : Expr): Expr = cnstr match {
+      case Car(list) => HeadFLS(Variable(sublistSetVar(list)))
+      case _ => cnstr
+    }
+
+    //This should always work after generateSetConstraints
+  
+
+    val aliased = setCnstrs.map(simpleTransform(aliasSigma, aliasHeadsTails)(_))
+    aliased
+
+  }
   /** This applies the procedure described in p.14.
     @param prpStruct : The derived PRP structure
-    @return the set constraint 
+    @return the set constraints 
   */
-  private def generateSetConstraints(prpStruct : Expr): Expr = {
-    val And(constraints) = prpStruct
-    val variables = variablesOf(prpStruct).filter(p => p.getType match {case ListType(_) => true ; case _ => false})
+  private def generateSetConstraints(prpStruct : Set[Expr]): Set[Expr] = {
+    
+    val variablesSets : Set[Identifier] = prpStruct.map(variablesOf(_)).flatten
+    val variables = variablesSets.filter(p => p.getType match {case ListType(_) => true ; case _ => false})
+
     //Ugly :P
     val types = variables.map(_.getType match {case ListType(inner) => { Some(inner)}; case _ => None}).filter(p => p != None).map(_.get)
 
@@ -195,57 +245,95 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
       Equals(sigma, setV)
     }
 
-    val otherCnstrs = constraints.map(simpleToBapaConversions(_))
-
-
+    val otherCnstrs = prpStruct.map(simpleToBapaConversions(_))
 
     //Step 4 : Existentially quantify over Segs
 
-    And((sigmaNils ++ sigmaEq ++ otherCnstrs).toSeq)
+    (sigmaNils ++ sigmaEq ++ otherCnstrs)
+  }
+
+  def generateSetContentsConstraints(prpStruct : Expr, c : Set[Expr]): Set[Expr] = {
+      c
   }
 
   private def simpleToBapaConversions(e : Expr): Expr = {
     def c0(e : Expr): Expr = e match {
-       case Equals(list, NilList(_)) => Equals(SetCardinality(Sigma(list)), IntLiteral(1))
-       case Equals(NilList(_), list) => Equals(SetCardinality(Sigma(list)), IntLiteral(1))
-       case IsSubList(list1, list2) => println(list1.getType +" || "+list2.getType); Or(Seq(SubsetOf(Sigma(list1), Sigma(list2)),Equals(Sigma(list1), Sigma(list2))))
+
+       case Equals(list, nil @ NilList(_)) => Equals(Sigma(list), Sigma(nil))
+       case Equals(nil @ NilList(_), list) => Equals(Sigma(list), Sigma(nil))
+       case Equals(list1, list2) if(list1.getType.isInstanceOf[ListType]) => Equals(Sigma(list1), Sigma(list2))
+       case IsSubList(list1, list2) => 
+         SubsetOf(Sigma(list1), Sigma(list2))
+       case ListLength(list) => Minus(SetCardinality(Sigma(list)), IntLiteral(1))
        case Not(e) => Not(c0(e))
-       case Or(seq) => Or(seq.map(c0))
-       //There shouldn't be any and here, e should be a clause !
+       case Or(seq) => Or(seq.map(c0).filter(_ != BooleanLiteral(true)))
+       //There shouldn't be any And here, e should be a clause !
        case _ => e
     }
-    c0(e)
+    simplePreTransform(c0)(e)
   }
 
 
   def rewriteCnstr(expression : Expr) : (Expr,Map[Expr,Expr]) = {
-    
-    val clauses : Set[Expr] = groundClauses(elimCons(expression))
-    println("Clauses : ")
-    println(clauses)
+    origParamIDs = variablesOf(expression).toSet
+    //Assumes that lets can be simplified
+    val simplifiedLets= simplifyLets(expandLets(expression))
 
+    debugMess("Received as input : ", simplifiedLets.toString)
+    
+    val clauses : Set[Expr] = groundClauses(elimCons(simplifiedLets))
+    
+    debugMess("Clauses : ", clauses)
    
     val instances = clauses.map(instantiateAxioms(_)).flatten
 
-    println("Axioms instantiation : ")
-    println(instances)
+    debugMess("Instantiated Axioms : ", instances)
 
-    val rewCnstr = groundClauses(And((instances ++ clauses).toSeq))
+    val instancesAndClauses = instances++clauses
+
+    debugMess("Axioms instantiation : ", instancesAndClauses)
+
+    val rewCnstr = groundClauses(And(instancesAndClauses.toSeq))
+
+    debugMess("Rewritten Constraints : ", rewCnstr)
+
+    val setCnstrs = generateSetConstraints(rewCnstr)
+
+    debugMess("Set Constraints : ", setCnstrs)
+
+    val aliased = aliasSublistSets(setCnstrs)
+    val title = "Aliased Constraints : \nWhere :\n"+sigmaMap.mkString("\n")
+    debugMess(title, aliased)
+
+    val listOfSigmas = sigmaMap.toList.unzip._2
+
+    val sizeCnstrs : List[Expr] = listOfSigmas.map( p => Not(Equals(SetCardinality(Variable(p)), IntLiteral(0))))
+
+    debugMess("Added size constraints :  ", sizeCnstrs.toSet)
 
 
-    println("Rewritten Constraints : ")
-    println(rewCnstr)
+    val sentToZ3 = sizeCnstrs.toSeq ++ aliased.toSeq
 
-    val setCnstrs = generateSetConstraints(And(rewCnstr.toSeq))
+    debugMess("SentToZ3 : ", sentToZ3.mkString("\n"))
 
-    println("Set Constraints : ")
-    println(setCnstrs)
 
-    (setCnstrs, Map())
+    (And(sentToZ3), Map())
   }
 
+
+  class NoModelTranslation(t: Expr) extends Exception("Can't translate back from subliset model" + t)
+
   def reconstructModel(model : Map[Identifier,Expr], meta : Map[Expr,Expr]) : Map[Identifier,Expr] = {
-  	sys.error("TODO")
+    def toListModel(expr : Expr): Expr = expr match {
+      //The emptySet
+      case FiniteSet(Seq()) =>
+        val tpe = expr.getType
+        NilList(tpe)
+      case _ => throw new NoModelTranslation(expr)
+    }
+    debugMess("Returned model", model.mkString("\n"))
+    model.filter(p => origParamIDs(p._1))
+
   }
 
 
@@ -264,7 +352,7 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
     lazy val K_FLSf : Set[Axiom] = Set(Pure, NoCycle1, NoCycle2, Refl, Trans, AntiSym,
                                        Total, UnfoldL, UnfoldR, GCS1, GCS2, GCS3)
     lazy val T_0 : Set[Axiom] = Set(NoCycle1, Refl, Trans, AntiSym, Total)
-    lazy val K_e : Set[Axiom] = K_FLSf -- T_0 - NoCycle2// - UnfoldL
+    lazy val K_e : Set[Axiom] = K_FLSf -- T_0 - Pure
 
 
     trait Axiom {

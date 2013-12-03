@@ -915,6 +915,7 @@ object TreeOps {
     case MapType(fromType, toType) => FiniteMap(Seq()).setType(tpe)
     case TupleType(tpes) => Tuple(tpes.map(simplestValue))
     case ArrayType(tpe) => ArrayFill(IntLiteral(0), simplestValue(tpe))
+    case ListType(tpe) => NilList(tpe)
     case _ => throw new Exception("I can't choose simplest value for type " + tpe)
   }
 

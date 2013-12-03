@@ -31,6 +31,7 @@ object Extractors {
       case ArrayMake(t) => Some((t, ArrayMake))
       case ListLength(t) => Some((t, ListLength))
       case Sigma(t) => Some((t, Sigma))
+      case HeadFLS(t) => Some((t,HeadFLS))
       case (ue: UnaryExtractable) => ue.extract
       case _ => None
     }

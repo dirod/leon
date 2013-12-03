@@ -104,6 +104,11 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case IsSubList(t1,t2) =>
       ppBinary(t1, t2," \u2aaf ", lvl)
 
+    case HeadFLS(list) =>
+      sb.append("head[")
+      pp(list,lvl)
+      sb.append("]")
+
     case Gcs(t1,t2) =>
       ppBinary(t1, t2, " \u2a05 ", lvl)
 
