@@ -360,6 +360,7 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
   def pp(tpe: TypeTree, lvl: Int): Unit = tpe match {
     case Untyped => sb.append("???")
     case UnitType => sb.append("Unit")
+    case BottomType => sb.append("\u22A5")
     case Int32Type => sb.append("Int")
     case BooleanType => sb.append("Boolean")
     case ArrayType(bt) => sb.append("Array["); pp(bt, lvl); sb.append("]")

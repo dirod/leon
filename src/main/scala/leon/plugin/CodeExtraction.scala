@@ -958,7 +958,11 @@ trait CodeExtraction extends Extractors {
 
         case ExNilList() =>
           //Bottom type for now should be changed once type is known!
-          NilList(BottomType).setType(ListType(BottomType))
+          NilList(BottomType)
+
+        case ExTypedNil(tt) =>
+          val tpe = extractType(tt.tpe)
+          NilList(tpe)
         
         case ExListLength(t) =>
           val rt = extractTree(t)

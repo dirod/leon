@@ -299,6 +299,33 @@ class DefaultEvaluator(ctx : LeonContext, prog : Program) extends Evaluator(ctx,
         case Choose(_, _) =>
           throw EvalError("Cannot evaluate choose.")
 
+        case NilList(_) => expr
+        case c @ Cdr(list) => list match {
+          case Cons(_, tail) => rec(ctx, tail)
+          case NilList(_) => throw RuntimeError("Calling tail on Nil in : "+ c )
+          case _ => Cdr(rec(ctx, list)).setType(c.getType)
+        }
+        case f @ FiniteList(seq) => {
+          val lstpe @ ListType(base) = f.getType
+          val nil : Expr = NilList(base)
+          if(seq.size == 0)
+            nil
+          else {
+            rec(ctx, seq.foldLeft(nil)((tail, head) => Cons(head, tail).setType(lstpe)))
+          }
+        }
+        case c @ Cons(head, tail) => c.getType match {
+          case lstpe @ ListType(base) =>
+            Cons(rec(ctx, head), rec(ctx, tail)).setType(lstpe)
+
+          case errortype => throw RuntimeError("Bad type in cons "+ (c, errortype))
+
+        }
+        case c @ Car(list) => list match {
+          case Cons(head, _ ) => rec(ctx, head)
+          case NilList(_) => throw RuntimeError("Calling head on Nil in : "+ c)
+          case _ => Car(rec(ctx, list)).setType(c.getType)
+        }
         case other => {
           context.reporter.error("Error: don't know how to handle " + other + " in Evaluator.")
           throw EvalError("Unhandled case in Evaluator : " + other) 

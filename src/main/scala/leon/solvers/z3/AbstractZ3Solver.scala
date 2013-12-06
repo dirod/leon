@@ -522,6 +522,34 @@ trait AbstractZ3Solver
           z3.mkApp(functionDefToDecl(fd), args.map(rec(_)): _*)
         }
 
+        case c @ Cons(head, tail) => c.getType match {
+          case ListType(base) => 
+            val constructor = listConsNilConstructors(base)(0)
+            constructor(rec(head), rec(tail))
+          case errorType => scala.sys.error("Unexpected type for :: "+ (ex, errorType))
+        }
+
+        case Car(list) => {
+          val ListType(base) = list.getType
+          val selector = listSelectors(base)(0)
+          selector(rec(list))
+        }
+
+        case Cdr(list) => {
+          val ListType(base) = list.getType
+          val selector = listSelectors(base)(1)
+          selector(rec(list))
+        }
+
+        case f @ FiniteList(seq) => f.getType match {
+          case ltpe @ ListType(base) => 
+            val nil : Expr = NilList(base) 
+            val nSeq = seq.foldLeft(nil)((tail, head) => Cons(head,tail).setType(ltpe))
+            rec(nSeq)
+          case errorType => scala.sys.error("Unexpected type for finite List: "+ (ex, errorType))
+
+        }
+
         case NilList(base) => {
           val constructor = listConsNilConstructors(base)
           constructor(1)()
@@ -665,10 +693,22 @@ trait AbstractZ3Solver
         }
         array
       }
-      case Some(ListType(dt)) => {
+      case Some(ltpe @ ListType(dt)) => {
         val Z3AppAST(decl, args) = z3.getASTKind(t)
         //Not sure of that :P
-        NilList(dt)
+        args match {
+          //This is a Cons
+          case List(head, tail) =>
+            Cons(rec(head, Some(dt)), rec(tail, Some(ltpe))).setType(ltpe)
+          //This is head or tail
+          case List(list) =>
+            sys.error("Reconstructing "+ t)
+            NilList(dt)
+          //This is Nil
+          case List() =>
+            NilList(dt)
+
+         }
       }
       case other => 
         if(t == unitValue) 

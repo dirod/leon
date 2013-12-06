@@ -600,7 +600,15 @@ object Trees {
     val fixedType = Int32Type
   }
 
-  case class FiniteList(exprs: Seq[Expr]) extends Expr
+  case class FiniteList(exprs: Seq[Expr]) extends Expr with FixedType {
+    assert(exprs.forall(p => p.getType == exprs(0).getType), 
+      "The elements of a finite list must of the same type; yet we got [%s]. In expr: \n%s".format("["+exprs.mkString(",")+"]"))
+    val fixedType = {
+      if(exprs.length == 0) AnyType
+      else ListType(exprs(0).getType)
+    }
+
+  }
   case class ListAt(list: Expr, index: Expr) extends Expr with ScalacPositional with FixedType {
     assert(list.getType.isInstanceOf[ListType], 
       "The list value in ListAt must of list type; yet we got [%s]. In expr: \n%s".format(list.getType, list))
@@ -631,7 +639,7 @@ object Trees {
         AnyType
     }
   }
-  // In FLS context, this mean all the suffix of the list
+  // In FLS context, this means all the suffixes of the list
   case class IsSubList(list1: Expr, list2: Expr) extends Expr with ScalacPositional with FixedType {
     assert(list1.getType.isInstanceOf[ListType] && list2.getType.isInstanceOf[ListType], 
       "The lists values in IsSublist must of list type; yet we got [%s] x [%s]. In exprs: \n%s \n%s".format(list1.getType, list2.getType, list1, list2))

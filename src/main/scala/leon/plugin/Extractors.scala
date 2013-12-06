@@ -873,6 +873,13 @@ trait Extractors {
       }
     }
 
+    object ExTypedNil {
+      def unapply(tree: TypeApply): Option[Tree] = tree match {
+        case TypeApply(ExSelected("leon", "Utils","nil"), tpe :: Nil) => Some(tpe)
+        case _ => None
+      }
+    }
+
     object ExListLength {
       def unapply(tree: Select): Option[Tree] = tree match {
         case Select(ExHasType(t, `listSym`), n) if n.toString == "length" || n.toString == "size" => Some(t)

@@ -38,6 +38,9 @@ object Utils {
   * Two relations ot the FLS logic in
   * Deciding Funcitonal Lists with Sublist Setes
   */
+
+  def nil[A]: List[A] = throw new RuntimeException("Implementation not supported")
+
   //Greatest common suffix
   def gcs[A](lhs: List[A], rhs: List[A]): List[A] = throw new RuntimeException("Implementation not supported")
 

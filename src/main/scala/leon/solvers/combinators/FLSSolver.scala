@@ -24,7 +24,7 @@ import purescala.Extractors._
     not be used. Therefore, we always go through a PRP structure.
   * @param underlying The underlying solver
 */
-class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr,Expr]](underlying){
+class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr,Expr]](underlying) with TimeoutSolver{
   import FLS2CompletionAxioms._
   
   def name = "FLS Solver"
@@ -82,8 +82,6 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
       @return the set of ground subterms
   */
   private def groundSubtermsOf(clause : Expr): Set[Expr] = {
-
-
     def groundSubtermsOf0(term : Expr, acc : Set[Expr] = Set()): Set[Expr] = term match {
       //These cases are ground Subterms
       case v @ Variable(id) if(v.getType.isInstanceOf[ListType]) => acc + v
@@ -259,8 +257,8 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
   private def simpleToBapaConversions(e : Expr): Expr = {
     def c0(e : Expr): Expr = e match {
 
-       case Equals(list, nil @ NilList(_)) => Equals(Sigma(list), Sigma(nil))
-       case Equals(nil @ NilList(_), list) => Equals(Sigma(list), Sigma(nil))
+       case Equals(list, nil @ NilList(_)) => Equals(SetCardinality(Sigma(list)), IntLiteral(1))
+       case Equals(nil @ NilList(_), list) => Equals(SetCardinality(Sigma(list)), IntLiteral(1))
        case Equals(list1, list2) if(list1.getType.isInstanceOf[ListType]) => Equals(Sigma(list1), Sigma(list2))
        case IsSubList(list1, list2) => 
          SubsetOf(Sigma(list1), Sigma(list2))
@@ -277,7 +275,7 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
   def rewriteCnstr(expression : Expr) : (Expr,Map[Expr,Expr]) = {
     origParamIDs = variablesOf(expression).toSet
     //Assumes that lets can be simplified
-    val simplifiedLets= simplifyLets(expandLets(expression))
+    val simplifiedLets = expression
 
     debugMess("Received as input : ", simplifiedLets.toString)
     
@@ -291,11 +289,11 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
 
     val instancesAndClauses = instances++clauses
 
-    debugMess("Axioms instantiation : ", instancesAndClauses)
+    debugMess("Axioms instantiation and clauses : ", instancesAndClauses)
 
     val rewCnstr = groundClauses(And(instancesAndClauses.toSeq))
 
-    debugMess("Rewritten Constraints : ", rewCnstr)
+    debugMess("PRP structure: ", rewCnstr)
 
     val setCnstrs = generateSetConstraints(rewCnstr)
 
@@ -307,12 +305,18 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
 
     val listOfSigmas = sigmaMap.toList.unzip._2
 
-    val sizeCnstrs : List[Expr] = listOfSigmas.map( p => Not(Equals(SetCardinality(Variable(p)), IntLiteral(0))))
+    val sizeCnstrs : List[Expr] = listOfSigmas.map( p => {
+      val SetType(ListType(base)) = p.getType
+      val nil = NilList(base)
+      val s = sigmaMap(nil)
+      //SubsetOf(Variable(s), Variable(p))
+      GreaterThan(SetCardinality(Variable(p)), IntLiteral(0))
+      })
 
     debugMess("Added size constraints :  ", sizeCnstrs.toSet)
 
 
-    val sentToZ3 = sizeCnstrs.toSeq ++ aliased.toSeq
+    val sentToZ3 = /*sizeCnstrs.toSeq ++*/ aliased.toSeq
 
     debugMess("SentToZ3 : ", sentToZ3.mkString("\n"))
 
@@ -321,9 +325,10 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
   }
 
 
-  class NoModelTranslation(t: Expr) extends Exception("Can't translate back from subliset model" + t)
+  class NoModelTranslation(t: Expr) extends Exception("Can't translate back from sublistset model" + t)
 
   def reconstructModel(model : Map[Identifier,Expr], meta : Map[Expr,Expr]) : Map[Identifier,Expr] = {
+    println("Reconstruct Model")
     def toListModel(expr : Expr): Expr = expr match {
       //The emptySet
       case FiniteSet(Seq()) =>
@@ -331,10 +336,27 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
         NilList(tpe)
       case _ => throw new NoModelTranslation(expr)
     }
+
     debugMess("Returned model", model.mkString("\n"))
     model.filter(p => origParamIDs(p._1))
 
   }
+
+  //TimeoutSolver things
+
+  def interrupt(): Unit = {
+    Unit
+  }
+
+  def recoverInterrupt(): Unit = {
+    Unit
+  }
+
+  protected def innerCheck: Option[Boolean] = {
+    underlying.check
+  }
+
+
 
 
   /**
