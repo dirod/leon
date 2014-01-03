@@ -66,11 +66,6 @@ object AnalysisPhase extends LeonPhase[Program,VerificationReport] {
 
     val interruptManager = vctx.context.interruptManager
 
-    for((funDef, vcs) <- vcs.toSeq.sortWith((a,b) => a._1 < b._1); vcInfo <- vcs ){
-      println("Kind = "+vcInfo.kind)
-      println(vcInfo.condition + "\n"+ toFLS(simplifyLets(vcInfo.condition)))
-    }
-
     for((funDef, vcs) <- vcs.toSeq.sortWith((a,b) => a._1 < b._1); vcInfo <- vcs if !interruptManager.isInterrupted()) {
       val funDef = vcInfo.funDef
       val vc = vcInfo.condition
@@ -156,7 +151,7 @@ object AnalysisPhase extends LeonPhase[Program,VerificationReport] {
     val reporter = ctx.reporter
 
     val baseFactories = Seq(
-      SolverFactory(() => new FairZ3Solver(ctx, program))
+      SolverFactory(() => new FLSSolver(new FairZ3Solver(ctx, program)))
     )
 
     val solverFactories = timeout match {
@@ -164,9 +159,11 @@ object AnalysisPhase extends LeonPhase[Program,VerificationReport] {
         baseFactories.map { sf =>
           new TimeoutSolverFactory(sf, sec*1000L)
         }
+        baseFactories
       case None =>
         baseFactories
     }
+
 
     val vctx = VerificationContext(ctx, solverFactories, reporter)
 

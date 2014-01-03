@@ -685,6 +685,15 @@ object Trees {
     }
   }
 
+  //Pre
+  case class Pre(list1: Expr, list2: Expr) extends Expr with FixedType {
+    assert(list1.getType == list2.getType, 
+      "The lists values in pre must of list[A] type; yet we got [%s] x [%s]. In exprs: \n%s \n%s".format(list1.getType, list2.getType, list1, list2))
+
+    val fixedType = list1.getType
+
+  }
+
 
 
 

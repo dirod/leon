@@ -15,13 +15,13 @@ import purescala.Extractors._
     Accepted members from the Scala's List specification:
       -Cons
       -length
-    Introducted trees for the Extension with Sets of Sublists and Content Sets:
+    Introduced trees for the Extension with Sets of Sublists and Content Sets:
       - greatest common suffix (gcs), ListxList->List
       - isSublist predicate, ListxList->Bool
+      - Pre
 
     Note that we assume that the VC always requires the Sets of Sublists and Content Sets
-    extension. Therefore the decision procedure for theory FLS (described in Section 6) will
-    not be used. Therefore, we always go through a PRP structure.
+    extension.
   * @param underlying The underlying solver
 */
 class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr,Expr]](underlying) with TimeoutSolver{
@@ -48,7 +48,6 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
   var origParamIDs: Set[Identifier] = Set()
   
 
-  
 
   type SublistSetID = Identifier
   //This contains the maping between a list variable and it's set of subLists
@@ -86,7 +85,7 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
       //These cases are ground Subterms
       case v @ Variable(id) if(v.getType.isInstanceOf[ListType]) => acc + v
       case Cdr(list) => groundSubtermsOf0(list, acc + term)
-      case Car(list) => groundSubtermsOf0(list, acc + term)
+      case Car(list) => groundSubtermsOf0(list, acc)
       case ListLength(list) => groundSubtermsOf0(list, acc)
       case UnaryOperator(t, _) => groundSubtermsOf0(t, acc)
       case BinaryOperator(l, r, _) => 
@@ -96,9 +95,7 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
       case term : Terminal => Set()
       //Called after elimCons, there shouldn't be any Cons here
       //case t @ Cons(head, tail) => groundSubterms()
-
       case _ => sys.error("Error matching groundSubtermsOf0 with :"+term)
-
     }
 
     //If this doesn't pass, this is not a clause.
@@ -106,7 +103,27 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
       case Or(seq) => seq.map(groundSubtermsOf0(_)).toSet.flatten
       case t => groundSubtermsOf0(t)
     }
+  }
+  //Closes substerms, therefore axiom instantiation terminates
+  private def extendedGroundSubterms(sts : Set[Expr]): Set[Expr] = {
+    def crossSelf2(s : Set[Expr]): Set[(Expr, Expr)] = {
+      (for(e0 <- s; e1 <- s if(e0 != e1)) yield (e0, e1))
+    }
 
+    def psy0(sts : Set[Expr]): Set[Expr] = {
+      val pairs = crossSelf2(sts)
+      sts ++ pairs.map(p => Gcs(p._1,p._2))
+    }
+
+    def psy(psy0 : Set[Expr]): Set[Expr] = {
+      //Heads cannot be instantiated in any axiom
+      //val heads = psy0.map(Car(_))
+      val pairs = crossSelf2(psy0)
+      val pretails = pairs.map(p => Set(Pre(p._1, p._2), Cdr(Pre(p._1, p._2)))).flatten
+      psy0 ++ pretails
+    }
+
+    psy(psy0(sts))
   }
 
   /** This should return the set of ground clauses of a given expression
@@ -135,6 +152,8 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
     }
   }
 
+
+
   /** This should remove length functions
       For each x : list variable in expression :
         - Add X = sigma(x) the set of all sublists (suffixes) of x
@@ -147,49 +166,6 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
   private def removeLengthFunction(expression : Expr) : Expr = {
 
     sys.error("TODO")
-  }
-
-  /** This may be useful if it is possible
-    @param alpha the structure that may be PRP
-    @return true iff alpha is a prp structure
-  */
-  private def isPRPStructure(alpha: Expr) : Boolean = {
-    sys.error("TODO")
-  }
-
-  /** For a given FLS formula. Return all the possible axiom instantiations
-    @param expression : A FLS formula
-    @return the set of instantiated axioms
-  */
-  private def instantiateAxioms(expression : Expr): Set[Expr] = {
-    //For now the ground terms can only be variables
-    val groundSubTerms : Set[Expr] = groundSubtermsOf(expression)
-    K_e.map(instantiateAxiom(groundSubTerms,_)).flatten
-  }
-
-  /**This instantiates the axioms.
-    @param the verification conditions
-    @return  an Axiom
-  */
-  private def instantiateAxiom(sts : Set[Expr], axiom : Axiom): Set[Expr] = {
-    def crossSelf2(s : Set[Expr]): Set[(Expr, Expr)] = {
-      (for(e0 <- s; e1 <- s if(e0 != e1)) yield Set((e0, e1), (e1, e0))).flatten
-    }
-    def crossSelf3(s : Set[Expr]): Set[(Expr, Expr, Expr)] = {
-      (for(e0 <- s; e1 <- s; e2 <-s if(e0 != e1 && e1 != e2 && e2 != e0)) yield 
-        Set((e0, e1, e2), (e0, e2, e1),
-            (e1, e0, e2), (e1, e2, e0), 
-            (e2, e0, e1), (e2, e1, e0))).flatten
-    }
-
-    axiom match {
-      case axiom : UnaryAxiom => 
-        sts.map(axiom(_))
-      case axiom : BinaryAxiom =>
-        crossSelf2(sts).map(axiom(_))
-      case axiom : TernaryAxiom =>
-        crossSelf3(sts).map(axiom(_))
-    }
   }
 
   private def aliasSublistSets(setCnstrs : Set[Expr]): Set[Expr] = {
@@ -213,46 +189,6 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
     aliased
 
   }
-  /** This applies the procedure described in p.14.
-    @param prpStruct : The derived PRP structure
-    @return the set constraints 
-  */
-  private def generateSetConstraints(prpStruct : Set[Expr]): Set[Expr] = {
-    
-    val variablesSets : Set[Identifier] = prpStruct.map(variablesOf(_)).flatten
-    val variables = variablesSets.filter(p => p.getType match {case ListType(_) => true ; case _ => false})
-
-    //Ugly :P
-    val types = variables.map(_.getType match {case ListType(inner) => { Some(inner)}; case _ => None}).filter(p => p != None).map(_.get)
-
-    //Step 1 : if there is no more than 1 list variable it does nothing
-
-    //Step 2 : If there is more than 1 list does something
-
-    //Step 3 : Adds Sigma(nil) == {nil} for each case and each type. And sigma(y) = {y} union...
-    val sigmaNils = types.map{ tpe =>
-      val nil = NilList(tpe)
-      val sigma = Sigma(nil)
-      val set = FiniteSet(nil :: Nil).setType(sigma.getType)
-      Equals(sigma, set)
-    }
-
-    val sigmaEq = variables.map { v =>
-      val sigma = Sigma(Variable(v))
-      val setV = FiniteSet(Variable(v) :: Nil)
-      Equals(sigma, setV)
-    }
-
-    val otherCnstrs = prpStruct.map(simpleToBapaConversions(_))
-
-    //Step 4 : Existentially quantify over Segs
-
-    (sigmaNils ++ sigmaEq ++ otherCnstrs)
-  }
-
-  def generateSetContentsConstraints(prpStruct : Expr, c : Set[Expr]): Set[Expr] = {
-      c
-  }
 
   private def simpleToBapaConversions(e : Expr): Expr = {
     def c0(e : Expr): Expr = e match {
@@ -263,9 +199,11 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
        case IsSubList(list1, list2) => 
          SubsetOf(Sigma(list1), Sigma(list2))
        case ListLength(list) => Minus(SetCardinality(Sigma(list)), IntLiteral(1))
+       case Gcs(list1,list2) => SetIntersection(list1, list2)//.setType(SetType(list1.getType))
        case Not(e) => Not(c0(e))
        case Or(seq) => Or(seq.map(c0).filter(_ != BooleanLiteral(true)))
-       //There shouldn't be any And here, e should be a clause !
+
+       //There shouldn't be any && here, e should be a clause !
        case _ => e
     }
     simplePreTransform(c0)(e)
@@ -282,20 +220,29 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
     val clauses : Set[Expr] = groundClauses(elimCons(simplifiedLets))
     
     debugMess("Clauses : ", clauses)
+
+    val sts : Set[Expr] = groundSubtermsOf(expression)
+    val exSubTerms : Set[Expr] = extendedGroundSubterms(sts)
+    debugMess("Extended set of ground terms ("+exSubTerms.size+") : ", exSubTerms)
+
+    
+    val instantiator = new AxiomsInstantiation(exSubTerms, KPre)
    
-    val instances = clauses.map(instantiateAxioms(_)).flatten
+    val instances = instantiator.instantiateAxioms
 
-    debugMess("Instantiated Axioms : ", instances)
+    // debugMess("Instantiated Axioms : ", instances)
 
-    val instancesAndClauses = instances++clauses
+    // val instancesAndClauses = instances++clauses
 
-    debugMess("Axioms instantiation and clauses : ", instancesAndClauses)
+    // debugMess("Axioms instantiation and clauses : ", instancesAndClauses)
 
-    val rewCnstr = groundClauses(And(instancesAndClauses.toSeq))
+    // val rewCnstr = groundClauses(And(instancesAndClauses.toSeq))
 
-    debugMess("PRP structure: ", rewCnstr)
+    // debugMess("PRP structure: ", rewCnstr)
+    val prpStruct = new PRPStruct(instances, clauses)
+    val bapaPrPStruct = simpleToBapaConversions(And(prpStruct.prpstruct.toSeq))
 
-    val setCnstrs = generateSetConstraints(rewCnstr)
+    val setCnstrs = prpStruct.sublistCnstr.toSet + bapaPrPStruct
 
     debugMess("Set Constraints : ", setCnstrs)
 
@@ -356,9 +303,241 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
     underlying.check
   }
 
+  /**
+  This class represents a PRP structure
+  */
+  class PRPStruct(val axiomsInstances : Set[Expr], val vc : Set[Expr]){
+    val prpstruct = groundClauses(And(axiomsInstances.toSeq ++ vc.toSeq))
+    private val alphaList: Set[Expr] = alphaListSet
+    private var Segs: Set[Sxy] = Set()
+    val sublistCnstr = generateSetConstraints
+    val contentCnstr = generateSetContentConstraints
+    //This defines S(x,y) where x and y are bound by the isSublist_1 relation
+    type Sxy = (Expr, Expr)
+    type TailDefd = (Expr, Expr)
+    /**
+      This returns the set of terms of type list in the clauses
+    */
+    private def alphaListSet: Set[Expr] = {
+      def alphaListSet0(term : Expr, acc : Set[Expr] = Set()): Set[Expr] = term match {
+        //These cases are ground Subterms
+        case v @ Variable(id) if(v.getType.isInstanceOf[ListType]) => acc + v
+        case Cdr(l) => alphaListSet0(l, acc + term)
+        case Gcs(l ,r) => alphaListSet0(l, acc + term) ++ alphaListSet0(r, acc + term)
+        case UnaryOperator(t, _) => alphaListSet0(t, acc)
+        case BinaryOperator(l, r, _) => 
+          alphaListSet0(l,acc) ++ alphaListSet0(r, acc)
+        case NAryOperator(seq, _) => 
+          seq.map(alphaListSet0(_, acc)).toSet.flatten
+        case term : Terminal => Set()
+        //Called after elimCons, there shouldn't be any Cons here
+        //case t @ Cons(head, tail) => groundSubterms()
+
+        case _ => sys.error("Error matching alphaListSet with :"+term)
+      }
+
+      prpstruct.map(alphaListSet0(_)).flatten  
+    }
+
+    private def segToSetDiff(segxy : Sxy): Expr = {
+      val (x,y) = segxy
+      val sigmaY = Sigma(y)
+      val setY = FiniteSet(Seq(y)).setType(sigmaY.getType)
+
+      val innerDiff = SetDifference(sigmaY, Sigma(x)).setType(sigmaY.getType)
+      val outerDiff = SetDifference(innerDiff, setY).setType(sigmaY.getType)
+      outerDiff
+    }
+
+    private def crossSelf2(s : Set[Expr]): Set[(Expr, Expr)] = {
+      (for(e0 <- s; e1 <- s if(e0 != e1)) yield Set((e0, e1), (e1, e0))).flatten
+    }
+
+    def clauseContains(p : Expr => Boolean): Boolean = {
+      def clauseContains0(expr: Expr, p : Expr => Boolean): Boolean = {
+        if(p(expr))
+          true
+        else expr match {
+          case UnaryOperator(t, _) => clauseContains0(t, p)
+          case BinaryOperator(l, r, _) =>
+            clauseContains0(l, p) || clauseContains0(r, p)
+          case NAryOperator(seq, _) =>
+            seq.exists(e => clauseContains0(e, p))
+          case term : Terminal => p(expr)
+          case _ => sys.error("Error matching clauseContains0 with :"+expr)
+        }
+      }
+
+      prpstruct.exists(e => clauseContains0(e, p))
+    }
+
+    def clauseFind(p : Expr => Option[Expr]): Option[Expr] = {
+      def clauseFind0(expr : Expr, p : Expr => Option[Expr]): Option[Expr] = {
+        val e = p(expr)
+        if(e != None)
+          e
+        else expr match {
+          case UnaryOperator(t,_) => clauseFind0(t, p)
+          case BinaryOperator(l, r, _) => clauseFind0(l, p) match {
+            case None => clauseFind0(r,p)
+            case r @ _ => r
+          }
+          case NAryOperator(seq, _) =>
+            seq.find(e => p(e).isDefined)
+          case term : Terminal => p(expr)
+          case _ => sys.error("Error matching clauseContains0 with :"+expr)
+        }
+      }
+      prpstruct.find(e => clauseFind0(e, p).isDefined) 
+    }
+
+    //These predicates will be used to define the sublist_1 relation and the defined tails
+    private def isSublist(expr : Expr, pair : (Expr, Expr)): Boolean = {
+      val (x, y) = pair
+      expr match {
+        case IsSubList(lhs, rhs) if(lhs == x && rhs == y) => true
+        case _ => false
+      }
+    }
+    private def notEqual(expr : Expr, pair : (Expr, Expr)): Boolean = {
+      val (x, y) = pair
+      expr match {
+        case Not(Equals(lhs, rhs)) =>
+          ((lhs == x) && (rhs == y))
+        case _ => false 
+      }
+    }
+
+    //This returns x if there is an x s.t tail(y) == x
+    private def isTailUndefined(expr : Expr, x : Expr, y: Expr): Option[Expr] = expr match {
+      case Equals(lhs, rhs) => 
+        val taily = Cdr(y).setType(y.getType)
+        if(lhs == taily && rhs == x)
+          Some(x)
+        else if(rhs == taily && lhs == x)
+          Some(x)
+        else
+          None
+      case _ => None
+    }
+
+    //This defines the forth condition for the sublist_1 relation
+    //Very heavy function
+    private def thereIsNoMiddle(pair : (Expr, Expr)): Boolean = {
+      val (x, y) = pair
+      ! alphaList.exists(z => 
+        (x != y && x != z && y != z) &&
+        (clauseContains(e => isSublist(e, (x,z))) && 
+        clauseContains(e => isSublist(e, (z,y)))))
+    } 
+
+    private def generateSetConstraints: Seq[Expr] = {
+      val types = alphaList.map(_.getType match {case ListType(inner) => { Some(inner)}; case _ => None}).filter(p => p != None).map(_.get)
+
+      //Generate Sigma(nil) = {nil} for each list type
+      val sigmaNils = types.map{ tpe =>
+        val nil = NilList(tpe)
+        val sigma = Sigma(nil)
+        val set = FiniteSet(nil :: Nil).setType(sigma.getType)
+        Equals(sigma, set)
+      }
+
+      val alphaListPairs = crossSelf2(alphaList)
+
+      val step3Cnstrs = for(y <- alphaList) yield {
+        var definedy : Seq[Expr] = Seq()
+        var segsy : Seq[Expr] = Seq()
+        val sigmaY = Sigma(y)
+        
+        val tpe @ ListType(inner) = y.getType
+        val setY : Expr = FiniteSet(Seq(y))
+        for(x <- alphaList if(x != y)) yield {
+
+          clauseFind(p => isTailUndefined(p, x, y)) match {
+            //Case 2: there is x s.t. x = tail(y)
+            case Some(x) => 
+              definedy = definedy :+ Sigma(x) 
+            //Case 3: There may be a Sxy between x and y if x isSublist of y && there is no z
+            case None => if(clauseContains(p => isSublist(p, (x,y))) && thereIsNoMiddle(x,y)) {
+              val sxy = (x,y)
+              Segs = Segs + sxy
+              segsy = segsy :+ segToSetDiff(sxy)
+            }
+          }
+        }
+        //Constructs sigma(y) = {y} U ...
+        val union = (segsy ++ definedy).foldLeft(setY)((l,r) => SetUnion(l,r).setType(sigmaY.getType))
+        Equals(sigmaY, union)
+      }
+
+      /*Existentially quantify over segs, create set disjunctions of point 3.4 and then replace
+        with equivalent expression of set differences
+      */
+      val step4Cnstrs = for(x <- alphaList; sxy <- Segs) yield{
+        val setX = FiniteSet(Seq(x)).setType(SetType(x.getType))
+        val sigmaxydiff = segToSetDiff(sxy)
+        val conj = SetIntersection(sigmaxydiff, setX).setType(setX.getType)
+        Equals(SetCardinality(conj), IntLiteral(0))
+      }
+
+
+      sigmaNils.toSeq ++ step3Cnstrs.toSeq ++ step4Cnstrs.toSeq 
+    }
+
+  /** This applies the procedure described in p.14.
+  */
+  private def generateSetContentConstraints : Seq[Expr] = {
+    Seq()
+  }
+  }
 
 
 
+  class AxiomsInstantiation(sts : Set[Expr], axioms : Set[Axiom]) {
+
+    lazy val cross2 = crossSelf2(sts)
+    lazy val cross3 = crossSelf3(sts)
+
+    /** For a given FLS formula. Return all the possible axiom instantiations
+      @param expression : A FLS formula
+      @return the set of instantiated axioms
+    */
+    def instantiateAxioms : Set[Expr] = {
+      axioms.map(instantiateAxiom(_)).flatten
+    }
+
+    /**This instantiates the axioms.
+      @param the verification conditions
+      @return  an Axiom
+    */
+    private def instantiateAxiom(axiom : Axiom): Set[Expr] = {
+      axiom match {
+        case axiom : UnaryAxiom =>
+          debugMess("Instantiating axiom with "+sts.size+": ", axiom.toString)
+          sts.map(axiom(_))
+        case axiom : BinaryAxiom =>
+          debugMess("Instantiating axiom with "+cross2.size+": ", axiom.toString)
+          cross2.map(axiom(_))
+          Set()
+        case axiom : TernaryAxiom =>
+          debugMess("Instantiating axiom with "+cross3.size+": ", axiom.toString)
+          cross3.map(axiom(_))
+  
+      }
+    }
+    def crossSelf2(s : Set[Expr]): Set[(Expr, Expr)] = {
+        (for(e0 <- s; e1 <- s if(e0 != e1)) yield Set((e0, e1), (e1, e0))).flatten
+    }
+    def crossSelf3(s : Set[Expr]): Set[(Expr, Expr, Expr)] = {
+        (for(p <- cross2; e2 <- s if(p._1 != e2 && p._2 != e2)) yield {
+          val e0 = p._1
+          val e1 = p._2
+          Set((e0, e1, e2), (e0, e2, e1),
+              (e1, e0, e2), (e1, e2, e0), 
+              (e2, e0, e1), (e2, e1, e0))
+        }).flatten
+    }
+  }
   /**
     These objects instantiate axioms. They must be fed with ground terms of list type
   */
@@ -369,12 +548,14 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
     S_FLS = {bool, list data}
     K_FLSf = {Pure, NoCycle{1,2}, Refl, Trans, AntiSym, Total, UnfoldL, UnfoldR, GCS{1,2,3}}
     T_0 = {NoCycle1, Refl, Trans, AntiSym, Total}
-    K_e = K_FLSf \T_0
+    K_e = K_FLSf \ T_0
     */
     lazy val K_FLSf : Set[Axiom] = Set(Pure, NoCycle1, NoCycle2, Refl, Trans, AntiSym,
                                        Total, UnfoldL, UnfoldR, GCS1, GCS2, GCS3)
     lazy val T_0 : Set[Axiom] = Set(NoCycle1, Refl, Trans, AntiSym, Total)
-    lazy val K_e : Set[Axiom] = K_FLSf -- T_0 - Pure
+    lazy val K_e : Set[Axiom] = (K_FLSf -- T_0)
+    //This is the set of axioms that will give a PRP struct for FLS^2
+    lazy val KPre = K_e + PreA
 
 
     trait Axiom {
@@ -417,6 +598,22 @@ class FLSSolver[+S <: Solver](underlying: S) extends RewritingSolver[S, Map[Expr
       }
 
       def apply(st0 : Expr, st1 : Expr, st2 : Expr): Expr
+    }
+
+    object PreA extends BinaryAxiom {
+      def apply(x : Expr, y : Expr): Expr = {
+        val tpe @ ListType(inner) = x.getType
+        val pre = Pre(x,y)
+        val gcs = Gcs(x,y)
+        val lhs0 = Not(Equals(x,y))
+        val lhs1 = Not(Equals(x, gcs))
+        val lhs2 = Not(Equals(y, gcs))
+        val rhs0 = IsSubList(pre, x)
+        val rhs1 = Equals(Cdr(pre), gcs)
+        val lhs = And(Seq(lhs0, lhs1, lhs2))
+        val rhs = And(Seq(rhs0, rhs1))
+        Or(Not(lhs), rhs)
+      }
     }
 
     object Pure extends BinaryAxiom {

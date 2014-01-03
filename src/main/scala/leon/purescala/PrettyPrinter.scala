@@ -173,7 +173,6 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case MapGet(m,k) =>
       pp(m, lvl)
       ppNary(Seq(k), "(", ",", ")", lvl)
-
     case MapIsDefinedAt(m,k) =>
       pp(m, lvl)
       sb.append(".isDefinedAt")
@@ -252,6 +251,12 @@ class PrettyPrinter(sb: StringBuffer = new StringBuffer) {
     case Tau(s) =>
       sb.append("\u03c4(") //small tau
       pp(s, lvl)
+      sb.append(")")
+    case Pre(list1, list2) =>
+      sb.append("pre(")
+      pp(list1,lvl)
+      sb.append(",")
+      pp(list2,lvl)
       sb.append(")")
     case IfExpr(c, t, e) =>
       sb.append("if (")
